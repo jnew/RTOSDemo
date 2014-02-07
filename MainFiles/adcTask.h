@@ -16,5 +16,5 @@ void vStartadcTask(adcStruct *adcData ,unsigned portBASE_TYPE uxPriority, vtI2CS
 //send message from timer
 portBASE_TYPE SendadcTimerMsg(adcStruct *adcData);
 //send message from conductor with i2c data from pic
-portBASE_TYPE SendadcValueMsg(adcStruct *adcData,uint8_t value,portTickType ticksToBlock);
+portBASE_TYPE SendadcValueMsg(adcStruct *adcData,uint8_t length,uint8_t* value,portTickType ticksToBlock);
 #endif

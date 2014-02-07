@@ -23,7 +23,7 @@
 
 typedef struct {
 	uint8_t msgType;
-	uint8_t data;
+	uint8_t data[64];
 } adcMsg;
 
 static portTASK_FUNCTION_PROTO( vadcTask, pvParameters );
@@ -52,7 +52,7 @@ portBASE_TYPE SendadcTimerMsg(adcStruct *adcData)
 	return(xQueueSend(adcData->inQ,(void *) (&timerMsg),0));
 }
 
-portBASE_TYPE SendadcValueMsg(adcStruct *adcData,uint8_t value,portTickType ticksToBlock)
+portBASE_TYPE SendadcValueMsg(adcStruct *adcData,uint8_t length,uint8_t* value,portTickType ticksToBlock)
 {
 	adcMsg tempBuffer;
 
@@ -60,7 +60,10 @@ portBASE_TYPE SendadcValueMsg(adcStruct *adcData,uint8_t value,portTickType tick
 		VT_HANDLE_FATAL_ERROR(0);
 	}
 	tempBuffer.msgType = 1;
-	tempBuffer.data = value;
+	uint8_t i;
+	for( i = 0; i < length; i = i+1) {
+		tempBuffer.data[i] = value[i];
+	}
 	return(xQueueSend(adcData->inQ,(void *) (&tempBuffer),ticksToBlock));
 }
 
@@ -68,9 +71,9 @@ int getMsgType(adcMsg *Msg)
 {
 	return(Msg->msgType);
 }
-uint8_t getData(adcMsg *Msg)
+uint8_t* getData(adcMsg *Msg)
 {
-	return Msg->data;
+	return (uint8_t *) &Msg->data[0];
 }
 
 static portTASK_FUNCTION(vadcTask, pvParameters) {
@@ -101,7 +104,7 @@ static portTASK_FUNCTION(vadcTask, pvParameters) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
 				#if DEMO == 1
-				SendadcValueMsg(param, demoSweep, portMAX_DELAY);
+				SendadcValueMsg(param, 1, &demoSweep, portMAX_DELAY);
 				demoSweep = demoSweep + 1;
 				if(demoSweep == 100)
 					demoSweep = 0;
@@ -110,13 +113,17 @@ static portTASK_FUNCTION(vadcTask, pvParameters) {
 			}
 			//1 is incoming i2c data, parse it
 			case 1: {
-				buff[buffLoc] = getData(&msg);
-				if(buffLoc == 19) {
-					SendLCDADC(param->lcdData,20,buff,portMAX_DELAY);
-					buffLoc = 0;
-				}
-				else {
-					buffLoc++;
+				uint8_t *dataPtr = getData(&msg);
+				int i;
+				for(i = 1; i < dataPtr[0]; i = i + 1) {
+					buff[buffLoc] = dataPtr[i];
+					if(buffLoc == 19) {
+						SendLCDADC(param->lcdData,20,buff,portMAX_DELAY);
+						buffLoc = 0;
+					}
+					else {
+						buffLoc++;
+					}
 				}
 			break;
 			}

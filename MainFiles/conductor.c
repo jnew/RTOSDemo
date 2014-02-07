@@ -83,7 +83,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 		// This isn't a state machine, it is just acting as a router for messages
 		switch(recvMsgType) {
 		case 8: {
-		   	SendadcValueMsg(adcData,*valPtr,portMAX_DELAY);
+		   	SendadcValueMsg(adcData,(*valPtr), valPtr, portMAX_DELAY);
 			break;
 		}
 		case vtI2CMsgTypeTempInit: {
