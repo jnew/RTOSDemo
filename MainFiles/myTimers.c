@@ -3,6 +3,7 @@
 #include "task.h"
 #include "projdefs.h"
 #include "timers.h"
+#include "lpc17xx_gpio.h"
 
 /* include files. */
 #include "vtUtilities.h"
@@ -102,7 +103,7 @@ void startTimerForTemperature(vtTempStruct *vtTempdata) {
 //
 // how often the timer that sends messages to the ADC task should run
 // Set the task up to run every 10 ms
-#define adcWRITE_RATE_BASE	( ( portTickType ) 10 / portTICK_RATE_MS)
+#define adcWRITE_RATE_BASE	( ( portTickType ) 30 / portTICK_RATE_MS)
 
 // Callback function that is called by the TemperatureTimer
 //   Sends a message to the queue that is read by the Temperature Task
@@ -118,10 +119,12 @@ void adcTimerCallback(xTimerHandle pxTimer)
 		adcStruct *ptr = (adcStruct *) pvTimerGetTimerID(pxTimer);
 		// Make this non-blocking *but* be aware that if the queue is full, this routine
 		// will not care, so if you care, you need to check something
+		GPIO_SetValue(0,0x8000);
 		if (SendadcTimerMsg(ptr) == errQUEUE_FULL) {
 			// Here is where you would do something if you wanted to handle the queue being full
 			VT_HANDLE_FATAL_ERROR(0);
 		}
+		GPIO_ClearValue(0,0x8000);
 	}
 }
 

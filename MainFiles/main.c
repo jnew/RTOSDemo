@@ -79,6 +79,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "system_LPC17xx.h"
+#include "lpc17xx_gpio.h"
 
 #ifndef   PCONP_PCTIM0
 /* MTJ_NOTE: This will not compile properly if you do not delete the old version of */
@@ -147,11 +148,11 @@ tick hook). */
 #define mainINTEGER_TASK_PRIORITY           ( tskIDLE_PRIORITY)
 #define mainGEN_QUEUE_TASK_PRIORITY			( tskIDLE_PRIORITY)
 #define mainFLASH_TASK_PRIORITY				( tskIDLE_PRIORITY)
-#define mainLCD_TASK_PRIORITY				( tskIDLE_PRIORITY)
-#define mainI2CTEMP_TASK_PRIORITY			( tskIDLE_PRIORITY)
+#define mainLCD_TASK_PRIORITY				( tskIDLE_PRIORITY+1)
+#define mainI2CTEMP_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
 #define mainUSB_TASK_PRIORITY				( tskIDLE_PRIORITY)
-#define mainI2CMONITOR_TASK_PRIORITY		( tskIDLE_PRIORITY)
-#define mainCONDUCTOR_TASK_PRIORITY			( tskIDLE_PRIORITY)
+#define mainI2CMONITOR_TASK_PRIORITY		( tskIDLE_PRIORITY+2)
+#define mainCONDUCTOR_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
 
 /* The WEB server has a larger stack as it utilises stack hungry string
 handling library calls. */
@@ -221,6 +222,10 @@ int main( void )
 	/* Configure the hardware for use by this demo. */
 	prvSetupHardware();
 
+	//init GPIO debug
+	GPIO_SetDir(0,0x78000,1);
+	GPIO_ClearValue(0,0x78000);
+
 	#if USE_FREERTOS_DEMO == 1
 	/* Start the standard demo tasks.  These are just here to exercise the
 	kernel port and provide examples of how the FreeRTOS API can be used. */
@@ -248,7 +253,7 @@ int main( void )
 	// Here we set up a timer that will send messages to the LCD task.  You don't have to have this timer for the LCD task, it is just showing
 	//  how to use a timer and how to send messages from that timer.
 	//startTimerForLCD(&vtLCDdata);
-	char test[15] = "Hello World!";
+	//char test[15] = "Hello World!";
 	//SendLCDPrintMsg(&vtLCDdata,15,test,portMAX_DELAY);
 	#endif
 	

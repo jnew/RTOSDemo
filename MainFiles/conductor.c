@@ -16,6 +16,7 @@
 #include "adcTask.h"
 #include "I2CTaskMsgTypes.h"
 #include "conductor.h"
+#include "lpc17xx_gpio.h"
 
 /* *********************************************** */
 // definitions and data structures that are private to this file
@@ -83,7 +84,9 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 		// This isn't a state machine, it is just acting as a router for messages
 		switch(recvMsgType) {
 		case 8: {
+			GPIO_SetValue(0,0x20000);
 		   	SendadcValueMsg(adcData,(*valPtr), valPtr, portMAX_DELAY);
+			GPIO_ClearValue(0,0x20000);
 			break;
 		}
 		case vtI2CMsgTypeTempInit: {

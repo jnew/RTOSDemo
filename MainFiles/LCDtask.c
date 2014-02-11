@@ -11,6 +11,7 @@
 #include "vtUtilities.h"
 #include "LCDtask.h"
 #include "string.h"
+#include "lpc17xx_gpio.h"
 
 // I have set this to a larger stack size because of (a) using printf() and (b) the depth of function calls
 //   for some of the LCD operations
@@ -21,12 +22,12 @@
 #if PRINTF_VERSION == 1
 #define lcdSTACK_SIZE		((baseStack+5)*configMINIMAL_STACK_SIZE)
 #else
-#define lcdSTACK_SIZE		(baseStack*configMINIMAL_STACK_SIZE)
+#define lcdSTACK_SIZE		((baseStack+5)*configMINIMAL_STACK_SIZE)
 #endif
 
 // definitions and data structures that are private to this file
 // Length of the queue to this task
-#define vtLCDQLen 10 
+#define vtLCDQLen 50 
 // a timer message -- not to be printed
 #define LCDMsgTypeTimer 1
 // a message to be printed
@@ -113,9 +114,6 @@ portBASE_TYPE SendLCDADC(vtLCDStruct *lcdData,int length, uint8_t *value,portTic
 	int i;
 	for( i = 0; i < length; i = i+1 ) {
 		lcdBuffer.buf[i] = value[i];
-		//char tempBuff[5];
-		//sprintf(tempBuff,"%d",lcdBuffer.buf[i]);
-		//SendLCDPrintMsg(lcdData, 5, tempBuff, portMAX_DELAY);
 	}
 	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
 }
@@ -138,10 +136,10 @@ int getMsgLength(vtLCDMsg *lcdBuffer)
 	return(lcdBuffer->length);
 }
 
-uint8_t getValueADC(vtLCDMsg *lcdStruct, int i)
+uint8_t *getValueADC(vtLCDMsg *lcdStruct)
 {
 	uint8_t *ptr = lcdStruct->buf;
-	return ptr[i];
+	return ptr;
 }
 
 void copyMsgString(char *target,vtLCDMsg *lcdBuffer,int targetMaxLen)
@@ -153,12 +151,20 @@ void initGraph()
 {  	
 	int i;
 	for(i = 0; i < 230; i = i+1) {
+		if((230-i)%39 == 0) {
+			GLCD_PutPixel(9, i);
+			GLCD_PutPixel(8, i);
+			}
 		GLCD_PutPixel(10, i);
 	}
 	for(i = 0; i < 320; i = i+1) {
 		GLCD_PutPixel(i, 220);
+		if((i + 11)%22 == 0) {
+			GLCD_PutPixel(i,221);
+			GLCD_PutPixel(i,222);
+			}
 	}
-   	GLCD_DisplayString(29, 13, 0, (unsigned char* )"Y: Volts (V), X: Time (ms)");
+   	GLCD_DisplayString(29, 13, 0, (unsigned char* )"Y: Volts (1V), X: Time (10ms)");
 }
 
 // End of private routines for message buffers
@@ -245,6 +251,10 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 		vtITMu8(vtITMPortLCDMsg,getMsgType(&msgBuffer));
 		vtITMu8(vtITMPortLCDMsg,getMsgLength(&msgBuffer));
 
+		uint8_t dataPoints[140];
+		int i = 0;
+		int yVal = 0;
+
 		// Take a different action depending on the type of the message that we received
 		switch(getMsgType(&msgBuffer)) {
 		case LCDMsgTypePrint: {
@@ -279,25 +289,26 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 			break;
 		}
 		case LCDMsgTypeADC: {
-			switch (curFrame) {
-			 case 0: GLCD_SetTextColor(Red); GLCD_ClearWindow(11,0,309,219,Black); GLCD_ClearWindow(10,0,1,220,White); break;
-			 case 1: GLCD_SetTextColor(Blue); break;
-			 case 2: GLCD_SetTextColor(Green); break;
+			if (curFrame == 0) {
+				//GLCD_ClearWindow(11,0,309,219,Black); GLCD_ClearWindow(10,0,1,220,White);
 			}
-			int XZERO = 10 + curFrame*100;
+			int XZERO = 11 + (curFrame*60);
 			int YZERO = 220;
-			if(curFrame == 2)
+			if(curFrame == 4)
 				curFrame = 0;
 			else
 				curFrame++;
-			int i = 0;
+
+			GPIO_SetValue(0,0x10000);
+			uint8_t *ptr = getValueADC(&msgBuffer);
 			for( i = 0; i < getMsgLength(&msgBuffer); i = i+1) {
-				//char tempBuff[5];
-				//sprintf(tempBuff,"%d %d", getValueADC(&msgBuffer, i), i);
-				//GLCD_DisplayString(i, 0, 0, (unsigned char *) tempBuff);
-				GLCD_ClearWindow(XZERO + i*5, YZERO - getValueADC(&msgBuffer, i), 1, 1, White);
-				GLCD_PutPixel(XZERO + i*5, YZERO - getValueADC(&msgBuffer, i));
+				yVal = ptr[i]/2;
+				GLCD_ClearWindow(XZERO + i*3, YZERO - dataPoints[curFrame*20+i],1,1,Black);
+				GLCD_ClearWindow(XZERO + i*3, YZERO - yVal,1,1,White);
+				GLCD_PutPixel(XZERO + i*3, YZERO - yVal);
+				dataPoints[curFrame*20+i] = yVal;
 		    }
+			GPIO_ClearValue(0,0x10000);
 			//handle writing frame of ADC data as graph
 			break;
 		}
