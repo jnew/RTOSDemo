@@ -57,48 +57,6 @@ void startTimerForLCD(vtLCDStruct *vtLCDdata) {
 }
 
 /* *********************************************************** */
-// Functions for the Temperature Task related timer
-//
-// how often the timer that sends messages to the LCD task should run
-// Set the task up to run every 500 ms
-#define tempWRITE_RATE_BASE	( ( portTickType ) 10 / portTICK_RATE_MS)
-
-// Callback function that is called by the TemperatureTimer
-//   Sends a message to the queue that is read by the Temperature Task
-void TempTimerCallback(xTimerHandle pxTimer)
-{
-	if (pxTimer == NULL) {
-		VT_HANDLE_FATAL_ERROR(0);
-	} else {
-		// When setting up this timer, I put the pointer to the 
-		//   Temperature structure as the "timer ID" so that I could access
-		//   that structure here -- which I need to do to get the 
-		//   address of the message queue to send to 
-		vtTempStruct *ptr = (vtTempStruct *) pvTimerGetTimerID(pxTimer);
-		// Make this non-blocking *but* be aware that if the queue is full, this routine
-		// will not care, so if you care, you need to check something
-		if (SendTempTimerMsg(ptr,tempWRITE_RATE_BASE,0) == errQUEUE_FULL) {
-			// Here is where you would do something if you wanted to handle the queue being full
-			VT_HANDLE_FATAL_ERROR(0);
-		}
-	}
-}
-
-void startTimerForTemperature(vtTempStruct *vtTempdata) {
-	if (sizeof(long) != sizeof(vtTempStruct *)) {
-		VT_HANDLE_FATAL_ERROR(0);
-	}
-	xTimerHandle TempTimerHandle = xTimerCreate((const signed char *)"Temp Timer",tempWRITE_RATE_BASE,pdTRUE,(void *) vtTempdata,TempTimerCallback);
-	if (TempTimerHandle == NULL) {
-		VT_HANDLE_FATAL_ERROR(0);
-	} else {
-		if (xTimerStart(TempTimerHandle,0) != pdPASS) {
-			VT_HANDLE_FATAL_ERROR(0);
-		}
-	}
-}
-
-/* *********************************************************** */
 // Functions for the ADC Task related timer
 //
 // how often the timer that sends messages to the ADC task should run

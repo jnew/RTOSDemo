@@ -14,4 +14,7 @@
 // below is not actually an i2c message, but the value is reserved
 #define TempMsgTypeTimer 5
 #define vtI2CMsgTypeADCRead 6 
+#define vtSensorGatherRequest 7
+#define vtMS1ADCRequest 8
+#define vtRoverMovementAck 10
 #endif

@@ -223,3 +223,6 @@ t22
 ldscript_ram_gnu.ld
 RTOSDemo_WebServerELF.dep
 ldscript_rom_gnu.ld
+RTOSDemo_ARMRoverELF.dep
+MainFiles.bak*
+MS1_ARM_SourceFiles.zip

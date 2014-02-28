@@ -96,11 +96,12 @@ You should read the note above.
 #define USE_FREERTOS_DEMO 0
 // Define whether or not to use my LCD task
 #define USE_MTJ_LCD 1
-// Define whether to use my temperature sensor read task (the sensor is on the PIC v4 demo board, so if that isn't connected
-//   then this should be off
-#define USE_MTJ_V4Temp_Sensor 1
 // Define whether to use my USB task
 #define USE_MTJ_USE_USB 0
+// Define whether to use MS1 Code
+#define USE_MS1_CODE 0
+// Define whether to use MS2 Code
+#define USE_MS2_CODE 1
 
 #if USE_FREERTOS_DEMO == 1
 /* Demo app includes. */
@@ -121,13 +122,14 @@ You should read the note above.
 // Include file for MTJ's LCD & i2cTemp tasks
 #include "vtUtilities.h"
 #include "lcdTask.h"
-#include "i2cTemp.h"
 #include "vtI2C.h"
 #include "myTimers.h"
 #include "conductor.h"
 
 //John's work
 #include "adcTask.h"
+#include "sensorTask.h"
+#include "motorTask.h"
 
 /* syscalls initialization -- *must* occur first */
 #include "syscalls.h"
@@ -149,10 +151,12 @@ tick hook). */
 #define mainGEN_QUEUE_TASK_PRIORITY			( tskIDLE_PRIORITY)
 #define mainFLASH_TASK_PRIORITY				( tskIDLE_PRIORITY)
 #define mainLCD_TASK_PRIORITY				( tskIDLE_PRIORITY+1)
-#define mainI2CTEMP_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
+#define mainADC_TASK_PRIORITY				( tskIDLE_PRIORITY+3)
 #define mainUSB_TASK_PRIORITY				( tskIDLE_PRIORITY)
 #define mainI2CMONITOR_TASK_PRIORITY		( tskIDLE_PRIORITY+2)
 #define mainCONDUCTOR_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
+#define mainSENSOR_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
+#define mainMOTOR_TASK_PRIORITY				( tskIDLE_PRIORITY+3)
 
 /* The WEB server has a larger stack as it utilises stack hungry string
 handling library calls. */
@@ -190,13 +194,8 @@ char *pcGetTaskStatusMessage( void );
 /* Holds the status message displayed by the WEB server. */
 static char *pcStatusMessage = mainPASS_STATUS_MESSAGE;
 
-
-#if USE_MTJ_V4Temp_Sensor == 1
-// data structure required for one temperature sensor task
-static vtTempStruct tempSensorData;
 // data structure required for conductor task
 static vtConductorStruct conductorData;
-#endif
 
 #if USE_MTJ_LCD == 1
 // data structure required for LCDtask API
@@ -205,6 +204,9 @@ static vtLCDStruct vtLCDdata;
 
 //John's data
 static adcStruct adcData;
+static sensorStruct sensorData;
+static motorStruct motorData;
+
 // data structure required for one I2C task
 static vtI2CStruct vtI2C0;
 
@@ -249,33 +251,18 @@ int main( void )
 	#if USE_MTJ_LCD == 1
 	// MTJ: My LCD demonstration task
 	StartLCDTask(&vtLCDdata,mainLCD_TASK_PRIORITY);
-	// LCD Task creates a queue to receive messages -- what it does with those messages will depend on how the task is configured (see LCDtask.c)
-	// Here we set up a timer that will send messages to the LCD task.  You don't have to have this timer for the LCD task, it is just showing
-	//  how to use a timer and how to send messages from that timer.
-	//startTimerForLCD(&vtLCDdata);
-	//char test[15] = "Hello World!";
-	//SendLCDPrintMsg(&vtLCDdata,15,test,portMAX_DELAY);
+	SendLCDPrintMsg(&vtLCDdata,20,"LCDTask Init",portMAX_DELAY);
 	#endif
 	
-	#if USE_MTJ_V4Temp_Sensor == 1
-	// MTJ: My i2cTemp demonstration task
-	// First, start up an I2C task and associate it with the I2C0 hardware on the ARM (there are 3 I2C devices, we need this one)
+	// Start up an I2C task and associate it with the I2C0 hardware on the ARM (there are 3 I2C devices, we need this one)
 	// See vtI2C.h & vtI2C.c for more details on this task and the API to access the task
 	// Initialize I2C0 for I2C0 at an I2C clock speed of 100KHz
 	if (vtI2CInit(&vtI2C0,0,mainI2CMONITOR_TASK_PRIORITY,100000) != vtI2CInitSuccess) {
 		VT_HANDLE_FATAL_ERROR(0);
 	}
-	// Now, start up the task that is going to handle the temperature sensor sampling (it will talk to the I2C task and LCD task using their APIs)
-	#if USE_MTJ_LCD == 1
-	//vStarti2cTempTask(&tempSensorData,mainI2CTEMP_TASK_PRIORITY,&vtI2C0,&vtLCDdata);
-	#else
-	//vStarti2cTempTask(&tempSensorData,mainI2CTEMP_TASK_PRIORITY,&vtI2C0,NULL);
-	#endif
-	// Here we set up a timer that will send messages to the Temperature sensing task.  The timer will determine how often the sensor is sampled
-	//startTimerForTemperature(&tempSensorData);
+
 	// start up a "conductor" task that will move messages around
-	vStartConductorTask(&conductorData,mainCONDUCTOR_TASK_PRIORITY,&vtI2C0,&tempSensorData, &adcData);
-	#endif
+	vStartConductorTask(&conductorData,mainCONDUCTOR_TASK_PRIORITY,&vtI2C0,&adcData, &sensorData, &motorData);
 
     /* Create the USB task. MTJ: This routine has been modified from the original example (which is not a FreeRTOS standard demo) */
 	#if USE_MTJ_USE_USB == 1
@@ -283,9 +270,18 @@ int main( void )
     xTaskCreate( vUSBTask, ( signed char * ) "USB", configMINIMAL_STACK_SIZE, ( void * ) NULL, mainUSB_TASK_PRIORITY, NULL );
 	#endif
 
-	//Start John's Task
-	vStartadcTask( &adcData, mainI2CTEMP_TASK_PRIORITY, &vtI2C0, &vtLCDdata);
+	//Start John's Tasks
+	#if USE_MS1_CODE == 1
+	vStartadcTask( &adcData, mainADC_TASK_PRIORITY, &vtI2C0, &vtLCDdata);
 	startTimerForADC(&adcData);
+	#endif
+	
+	#if USE_MS2_CODE == 1
+	vStartsensorTask(&sensorData, mainSENSOR_TASK_PRIORITY, &vtI2C0, &vtLCDdata, &motorData);
+	vStartmotorTask(&motorData, mainMOTOR_TASK_PRIORITY, &vtI2C0, &vtLCDdata);
+	//start the ARM's control loop (this will be on the webserver eventually)
+	SendsensorGatherMsg(&sensorData);
+	#endif
 	
 	/* Start the scheduler. */
 	// IMPORTANT: Once you start the scheduler, any variables on the stack from main (local variables in main) can be (will be...) written over

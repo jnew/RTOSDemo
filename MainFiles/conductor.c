@@ -12,8 +12,8 @@
 /* include files. */
 #include "vtUtilities.h"
 #include "vtI2C.h"
-#include "i2cTemp.h"
 #include "adcTask.h"
+#include "sensorTask.h"
 #include "I2CTaskMsgTypes.h"
 #include "conductor.h"
 #include "lpc17xx_gpio.h"
@@ -38,13 +38,14 @@ static portTASK_FUNCTION_PROTO( vConductorUpdateTask, pvParameters );
 
 /*-----------------------------------------------------------*/
 // Public API
-void vStartConductorTask(vtConductorStruct *params,unsigned portBASE_TYPE uxPriority, vtI2CStruct *i2c,vtTempStruct *temperature, adcStruct *adc)
+void vStartConductorTask(vtConductorStruct *params,unsigned portBASE_TYPE uxPriority, vtI2CStruct *i2c,adcStruct *adc, sensorStruct *sensor, motorStruct *motor)
 {
 	/* Start the task */
 	portBASE_TYPE retval;
 	params->dev = i2c;
-	params->tempData = temperature;
 	params->adcData = adc;
+	params->sensorData = sensor;
+	params->motorData = motor;
 	if ((retval = xTaskCreate( vConductorUpdateTask, ( signed char * ) "Conductor", conSTACK_SIZE, (void *) params, uxPriority, ( xTaskHandle * ) NULL )) != pdPASS) {
 		VT_HANDLE_FATAL_ERROR(retval);
 	}
@@ -63,10 +64,12 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 	vtConductorStruct *param = (vtConductorStruct *) pvParameters;
 	// Get the I2C device pointer
 	vtI2CStruct *devPtr = param->dev;
-	// Get the LCD information pointer
-	vtTempStruct *tempData = param->tempData;
-
+	// Get the MS1 ADCtask pointer
 	adcStruct *adcData = param->adcData;
+	// Get the sensorStruct pointer
+	sensorStruct *sensorData = param->sensorData;
+	// Get the motorStruct pointer
+	motorStruct *motorData = param->motorData;
 	
 	uint8_t recvMsgType;
 
@@ -83,26 +86,25 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 		//   other Q/tasks for other message types
 		// This isn't a state machine, it is just acting as a router for messages
 		switch(recvMsgType) {
-		case 8: {
+		case vtMS1ADCRequest: {
 			GPIO_SetValue(0,0x20000);
 		   	SendadcValueMsg(adcData,(*valPtr), valPtr, portMAX_DELAY);
 			GPIO_ClearValue(0,0x20000);
 			break;
 		}
-		case vtI2CMsgTypeTempInit: {
-			SendTempValueMsg(tempData,recvMsgType,(*valPtr),portMAX_DELAY);
+		case vtSensorGatherRequest: {
+			if((rxLen != 5) || (((valPtr[1]+valPtr[2]+valPtr[3])&0x17) != valPtr[4])) //ERROR
+				SendsensorERRORMsg(sensorData, 3, portMAX_DELAY);
+			else
+				SendsensorValueMsg(sensorData, 1, 4, valPtr, portMAX_DELAY);
 			break;
 		}
-		case vtI2CMsgTypeTempRead1: {
-			SendTempValueMsg(tempData,recvMsgType,(*valPtr),portMAX_DELAY);
-			break;
-		}
-		case vtI2CMsgTypeTempRead2: {
-			SendTempValueMsg(tempData,recvMsgType,(*valPtr),portMAX_DELAY);
-			break;
-		}
-		case vtI2CMsgTypeTempRead3: {
-			SendTempValueMsg(tempData,recvMsgType,(*valPtr),portMAX_DELAY);
+		case vtRoverMovementAck: {
+		//this will comm with the motorTask
+			if((rxLen != 3) || ((valPtr[1]&0x15) != valPtr[2])) //ERROR
+				SendmotorERRORMsg(motorData, 2, portMAX_DELAY);
+			else
+				SendsensorValueMsg(sensorData, 2, 2, valPtr, portMAX_DELAY);
 			break;
 		}
 		default: {

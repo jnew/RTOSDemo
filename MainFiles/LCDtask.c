@@ -13,6 +13,8 @@
 #include "string.h"
 #include "lpc17xx_gpio.h"
 
+#define USE_MS1_CODE 0
+
 // I have set this to a larger stack size because of (a) using printf() and (b) the depth of function calls
 //   for some of the LCD operations
 // I actually monitor the stack size in the code to check to make sure I'm not too close to overflowing the stack
@@ -224,7 +226,9 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 	GLCD_SetTextColor(tscr);
 	GLCD_SetBackColor(screenColor);
 	GLCD_Clear(screenColor);
+	#if USE_MS1_CODE == 1
 	initGraph();
+	#endif
 
 	curLine = 0;
 	curFrame = 0;

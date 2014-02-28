@@ -19,9 +19,6 @@
 
 #define i2cSTACK_SIZE		(5*configMINIMAL_STACK_SIZE)
 
-//1 if demo without pic
-#define DEMO 0
-
 typedef struct {
 	uint8_t msgType;
 	uint8_t data[28];
@@ -84,10 +81,6 @@ static portTASK_FUNCTION(vadcTask, pvParameters) {
 	uint8_t buff[20];
 	int buffLoc = 0;
 
-	#if DEMO == 1
-	uint8_t demoSweep = 20;
-	#endif
-
 	const uint8_t i2caddr[]= {0xAA};
 
 	for( ;; ) {
@@ -99,15 +92,9 @@ static portTASK_FUNCTION(vadcTask, pvParameters) {
 		switch(getMsgType(&msg)) {
 			//0 is timer, send an I2C request out
 			case 0: {
-				if (vtI2CEnQ(param->dev,8,0x4F,sizeof(i2caddr),i2caddr,28) != pdTRUE) {
+				if (vtI2CEnQ(param->dev,vtMS1ADCRequest,0x4F,sizeof(i2caddr),i2caddr,28) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
-				#if DEMO == 1
-				SendadcValueMsg(param, 1, &demoSweep, portMAX_DELAY);
-				demoSweep = demoSweep + 1;
-				if(demoSweep == 100)
-					demoSweep = 0;
-				#endif
 			break;
 			}
 			//1 is incoming i2c data, parse it
