@@ -16,5 +16,7 @@
 #define vtI2CMsgTypeADCRead 6 
 #define vtSensorGatherRequest 7
 #define vtMS1ADCRequest 8
-#define vtRoverMovementAck 10
+#define vtSensorGatherCheck 9
+#define vtRoverMovementCommand 10
+#define vtRoverMovementCheck 11
 #endif

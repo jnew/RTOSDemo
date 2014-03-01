@@ -17,6 +17,7 @@
 #include "motorTask.h"
 #include "I2CTaskMsgTypes.h"
 #include "lpc17xx_gpio.h"
+#include "messageDefs.h"
 
 #define i2cSTACK_SIZE		(5*configMINIMAL_STACK_SIZE)
 
@@ -82,7 +83,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 	motorStruct *param = (motorStruct *) pvParameters;
 	motorMsg msg;
 	
-	const uint8_t motorCommand[]= {0xBB};
+	const uint8_t motorCommand[]= {0xBA};
 	
 	SendLCDPrintMsg(param->lcdData,20,"motorTask Init",portMAX_DELAY);
 	
@@ -103,7 +104,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 
 
 				//current slave address is 0x4F, take note
-				if (vtI2CEnQ(param->dev,vtRoverMovementAck,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
+				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
 				SendLCDPrintMsg(param->lcdData,20,"Sent motor move",portMAX_DELAY);
@@ -111,7 +112,10 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 			}
 			case ROVERACK_ERROR: {
 				//this is where the arm will re-request the movement ack from the rover
-				//right now, it does nothing
+				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+				SendLCDPrintMsg(param->lcdData,20,"Resent move",portMAX_DELAY);
 			break;
 			}
 		}

@@ -17,6 +17,7 @@
 #include "I2CTaskMsgTypes.h"
 #include "conductor.h"
 #include "lpc17xx_gpio.h"
+#include "messageDefs.h"
 
 /* *********************************************** */
 // definitions and data structures that are private to this file
@@ -93,18 +94,52 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 			break;
 		}
 		case vtSensorGatherRequest: {
-			if((rxLen != 5) || (((valPtr[1]+valPtr[2]+valPtr[3])&0x17) != valPtr[4])) //ERROR
-				SendsensorERRORMsg(sensorData, 3, portMAX_DELAY);
-			else
-				SendsensorValueMsg(sensorData, 1, 4, valPtr, portMAX_DELAY);
+			GPIO_SetValue(0,0x20000);
+			if((rxLen != 3) || (((valPtr[1])&0x17) != valPtr[2]) || (valPtr[1] != 0x01)) //ERROR
+				SendsensorERRORMsg(sensorData, GATHER_ERROR_MSG, portMAX_DELAY);
+			else {
+				sensorData->checkType = GATHER_CHECK;
+				if (xTimerStart(sensorData->checkTimerHandle,0) != pdPASS) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+			}
+			GPIO_ClearValue(0,0x20000);
+				//SendsensorValueMsg(sensorData, SENSORVALUE_MSG, 4, valPtr, portMAX_DELAY);
 			break;
 		}
-		case vtRoverMovementAck: {
+		case vtSensorGatherCheck: {
+			if((rxLen != 5) || (((valPtr[1]+valPtr[2]+valPtr[3])&0x17) != valPtr[4])) //ERROR
+				break;
+				//SendsensorERRORMsg(sensorData, GATHER_ERROR_MSG, portMAX_DELAY);
+			else {
+				if (xTimerStop(sensorData->checkTimerHandle,0) != pdPASS) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+				SendsensorValueMsg(sensorData, SENSORVALUE_MSG, 4, valPtr, portMAX_DELAY);
+				}
+			break;
+		}
+		case vtRoverMovementCheck: {
 		//this will comm with the motorTask
-			if((rxLen != 3) || ((valPtr[1]&0x15) != valPtr[2])) //ERROR
-				SendmotorERRORMsg(motorData, 2, portMAX_DELAY);
-			else
-				SendsensorValueMsg(sensorData, 2, 2, valPtr, portMAX_DELAY);
+			if((rxLen != 3) || ((valPtr[1]&0x17) != valPtr[2])) //ERROR
+				break;
+			else {
+				if (xTimerStop(sensorData->checkTimerHandle,0) != pdPASS) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+				SendsensorValueMsg(sensorData, ROVERMOVE_MSG, 2, valPtr, portMAX_DELAY);
+			break;
+			}
+		}
+		case vtRoverMovementCommand: {
+			if((rxLen != 3) || ((valPtr[1]&0x17) != valPtr[2])) //ERROR
+				SendmotorERRORMsg(motorData, ROVERACK_ERROR, portMAX_DELAY);
+			else {
+				sensorData->checkType = ROVERACK_CHECK;
+				if (xTimerStart(sensorData->checkTimerHandle,0) != pdPASS) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+			}
 			break;
 		}
 		default: {

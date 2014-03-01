@@ -9,6 +9,8 @@
 #include "vtUtilities.h"
 #include "LCDtask.h"
 #include "myTimers.h"
+#include "messageDefs.h"
+#include "sensorTask.h"
 
 /* **************************************************************** */
 // WARNING: Do not print in this file -- the stack is not large enough for this task
@@ -98,4 +100,39 @@ void startTimerForADC(adcStruct *adcData) {
 			VT_HANDLE_FATAL_ERROR(0);
 		}
 	}
+}
+
+/* *********************************************************** */
+// Functions for the check timer
+#define checkWRITE_RATE_BASE	( ( portTickType ) 500 / portTICK_RATE_MS)
+
+// Callback function that is called by the TemperatureTimer
+//   Sends a message to the queue that is read by the Temperature Task
+void checkTimerCallback(xTimerHandle pxTimer)
+{
+	if (pxTimer == NULL) {
+		VT_HANDLE_FATAL_ERROR(0);
+	} else {
+		// When setting up this timer, I put the pointer to the 
+		//   Temperature structure as the "timer ID" so that I could access
+		//   that structure here -- which I need to do to get the 
+		//   address of the message queue to send to 
+		sensorStruct *ptr = (sensorStruct *) pvTimerGetTimerID(pxTimer);
+		// Make this non-blocking *but* be aware that if the queue is full, this routine
+		// will not care, so if you care, you need to check something
+		GPIO_SetValue(0,0x8000);
+		if (SendmessageCheck(ptr) == errQUEUE_FULL) {
+			// Here is where you would do something if you wanted to handle the queue being full
+			VT_HANDLE_FATAL_ERROR(0);
+		}
+		GPIO_ClearValue(0,0x8000);
+	}
+}
+
+xTimerHandle initCheckTimer(sensorStruct *sensorData) {
+	if (sizeof(long) != sizeof(sensorStruct *)) {
+		VT_HANDLE_FATAL_ERROR(0);
+	}
+	xTimerHandle checkTimerHandle = xTimerCreate((const signed char *)"Check Timer",checkWRITE_RATE_BASE,pdTRUE,(void *) sensorData,checkTimerCallback);
+	return checkTimerHandle;
 }

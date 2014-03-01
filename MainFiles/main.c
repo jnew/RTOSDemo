@@ -280,6 +280,8 @@ int main( void )
 	vStartsensorTask(&sensorData, mainSENSOR_TASK_PRIORITY, &vtI2C0, &vtLCDdata, &motorData);
 	vStartmotorTask(&motorData, mainMOTOR_TASK_PRIORITY, &vtI2C0, &vtLCDdata);
 	//start the ARM's control loop (this will be on the webserver eventually)
+	//init the check timer and store its handler
+	sensorData.checkTimerHandle = initCheckTimer(&sensorData);
 	SendsensorGatherMsg(&sensorData);
 	#endif
 	

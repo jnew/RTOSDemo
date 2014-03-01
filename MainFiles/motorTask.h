@@ -9,10 +9,6 @@ typedef struct {
 	xQueueHandle inQ;
 } motorStruct;
 
-//message types
-#define SENSORTASK_MSG 0
-#define ROVERACK_ERROR 1
-
 // Maximum length of a message that can be received by this task
 #define msgMaxLen   (sizeof(portTickType))
 
