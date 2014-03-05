@@ -269,7 +269,7 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 			// show the text
 			GLCD_DisplayString(curLine,0,1,(unsigned char *)lineBuffer);
 			curLine++;
-			if (curLine == 9) {
+			if (curLine == 6) {
 				//GLCD_Clear(screenColor);
 				curLine = 0;
 			}

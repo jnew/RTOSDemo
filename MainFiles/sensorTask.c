@@ -127,7 +127,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				//current slave address is 0x4F, take note
 					if (vtI2CEnQ(param->dev,vtSensorGatherRequest,0x4F,sizeof(gatherReq),gatherReq,3) != pdTRUE)
 						VT_HANDLE_FATAL_ERROR(0);
-					SendLCDPrintMsg(param->lcdData,20,"Sent gather req",portMAX_DELAY);
+					SendLCDPrintMsg(param->lcdData,20,"SND: Gather Req",portMAX_DELAY);
 			break;
 			}
 			//this is a check for sensor data called by a timer callback
@@ -135,26 +135,26 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 					if (vtI2CEnQ(param->dev,vtSensorGatherCheck,0x4F,sizeof(gatherCheck),gatherCheck,5) != pdTRUE) {
 						VT_HANDLE_FATAL_ERROR(0);
 					}
-					SendLCDPrintMsg(param->lcdData,20,"Sent gather check",portMAX_DELAY);
+					SendLCDPrintMsg(param->lcdData,20,"SND: Gather Chk",portMAX_DELAY);
 			break;
 			}
 			//1 is incoming i2c data, this is where we handle sensor data and call algorithm subroutines... hopefully
 			case SENSORVALUE_MSG: {
 				uint8_t *dataPtr = getData(&msg);
-				SendLCDPrintMsg(param->lcdData,20,"Good data: send out",portMAX_DELAY);
+				SendLCDPrintMsg(param->lcdData,20,"RCV: Sensor Data",portMAX_DELAY);
 				
 				
 				
 				//this is where the movement algorithm will decide what to issue as a command
 
 
-
+				//SendsensorGatherMsg(param);
 				SendmotorMoveMsg(param->motorData, SENSORTASK_MSG, dataPtr, portMAX_DELAY);
 			break;
 			}
 			//bad/no data from the rover, we need to regather
 			case GATHER_ERROR_MSG: {
-			  	SendLCDPrintMsg(param->lcdData,20,"Req nak: retry",portMAX_DELAY);
+			  	SendLCDPrintMsg(param->lcdData,20,"RSND: Gather Req",portMAX_DELAY);
 				SendsensorGatherMsg(param);
 			break;
 			}
@@ -162,11 +162,11 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				if (vtI2CEnQ(param->dev,vtRoverMovementCheck,0x4F,sizeof(motorCheck),motorCheck,3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
-				SendLCDPrintMsg(param->lcdData,20,"Sent move check",portMAX_DELAY);
+				SendLCDPrintMsg(param->lcdData,20,"SND: Move Check",portMAX_DELAY);
 			break;
 			}
 			case ROVERMOVE_MSG: {
-				SendLCDPrintMsg(param->lcdData,20,"Got rover ack",portMAX_DELAY);
+				SendLCDPrintMsg(param->lcdData,20,"RCV: Move Data",portMAX_DELAY);
 
 				
 				//this is where the actual movement will be recorded in the map	

@@ -83,7 +83,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 	motorStruct *param = (motorStruct *) pvParameters;
 	motorMsg msg;
 	
-	const uint8_t motorCommand[]= {0xBA};
+	const uint8_t motorCommand[]= {0xBA, 0x00, 0x00, 0x00, 0x00};
 	
 	SendLCDPrintMsg(param->lcdData,20,"motorTask Init",portMAX_DELAY);
 	
@@ -107,7 +107,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
-				SendLCDPrintMsg(param->lcdData,20,"Sent motor move",portMAX_DELAY);
+				SendLCDPrintMsg(param->lcdData,20,"SND: Move Command",portMAX_DELAY);
 			break;
 			}
 			case ROVERACK_ERROR: {
@@ -115,7 +115,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
-				SendLCDPrintMsg(param->lcdData,20,"Resent move",portMAX_DELAY);
+				SendLCDPrintMsg(param->lcdData,20,"RSND: Move Command",portMAX_DELAY);
 			break;
 			}
 		}
