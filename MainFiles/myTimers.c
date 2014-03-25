@@ -120,12 +120,12 @@ void checkTimerCallback(xTimerHandle pxTimer)
 		sensorStruct *ptr = (sensorStruct *) pvTimerGetTimerID(pxTimer);
 		// Make this non-blocking *but* be aware that if the queue is full, this routine
 		// will not care, so if you care, you need to check something
-		GPIO_SetValue(0,0x8000);
+		GPIO_SetValue(0,0x10000);
 		if (SendmessageCheck(ptr) == errQUEUE_FULL) {
 			// Here is where you would do something if you wanted to handle the queue being full
 			VT_HANDLE_FATAL_ERROR(0);
 		}
-		GPIO_ClearValue(0,0x8000);
+		GPIO_ClearValue(0,0x10000);
 	}
 }
 

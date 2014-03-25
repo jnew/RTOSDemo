@@ -83,7 +83,14 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 	motorStruct *param = (motorStruct *) pvParameters;
 	motorMsg msg;
 	
-	const uint8_t motorCommand[]= {0xBA, 0x00, 0x00, 0x00, 0x00};
+	const uint8_t *motorCommand;
+	const uint8_t forward_ten[]= {0xBA, 0x9F, 0x1F, 0x64, 0x00};
+	const uint8_t forward_five[]= {0xBA, 0x9F, 0x1F, 0x32, 0x00};
+	const uint8_t turn_right[]= {0xBA, 0x9F, 0x62, 0x0B, 0x00};
+	const uint8_t turn_left[]= {0xBA, 0xE1, 0x1F, 0x0B, 0x00};
+	const uint8_t backwards_five[]= {0xBA, 0xE1, 0x62, 0x32, 0x00};
+	const uint8_t stop[]= {0xBA, 0x00, 0x00, 0x00, 0x00};
+	unsigned int demoInt = 0;
 	
 	SendLCDPrintMsg(param->lcdData,20,"motorTask Init",portMAX_DELAY);
 	
@@ -104,17 +111,35 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 
 
 				//current slave address is 0x4F, take note
-				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
+				if(demoInt == 0)
+					motorCommand = forward_ten;
+				else if(demoInt == 1)
+					motorCommand = turn_left;
+				else if (demoInt == 2)
+					motorCommand = forward_five;
+				else
+					motorCommand = stop;
+				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F, 5, motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
+				demoInt = demoInt + 1;
 				SendLCDPrintMsg(param->lcdData,20,"SND: Move Command",portMAX_DELAY);
 			break;
 			}
 			case ROVERACK_ERROR: {
 				//this is where the arm will re-request the movement ack from the rover
-				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F,sizeof(motorCommand), motorCommand, 3) != pdTRUE) {
+				if(demoInt == 0)
+					motorCommand = forward_ten;
+				else if(demoInt == 1)
+					motorCommand = turn_left;
+				else if (demoInt == 2)
+					motorCommand = forward_five;
+				else
+					motorCommand = stop;
+				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F, 5, motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
+				demoInt = demoInt + 1;
 				SendLCDPrintMsg(param->lcdData,20,"RSND: Move Command",portMAX_DELAY);
 			break;
 			}

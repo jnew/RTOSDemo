@@ -109,7 +109,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 			break;
 		}
 		case vtSensorGatherCheck: {
-		 	if (timeOutCount > 3){
+		 	if (timeOutCount > 9){
 				if (xTimerStop(sensorData->checkTimerHandle,0) != pdPASS) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
@@ -142,7 +142,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 		}
 		case vtRoverMovementCheck: {
 		//this will comm with the motorTask
-			if(timeOutCount > 3) { 
+			if(timeOutCount > 20) { 
 				if (xTimerStop(sensorData->checkTimerHandle,0) != pdPASS) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
