@@ -9,3 +9,20 @@
 #define SENSORTASK_MSG 10
 #define ROVERACK_ERROR 11
 #define ROVERACK_CHECK 12
+#define ROVERMOVE_CHECK 13
+#define ROVERMOVE_CHECKCHECK 14
+
+//message types for motorTask/sensorTask communication
+#define ROVERMOVE_FORWARD_ABSOLUTE 20
+#define ROVERMOVE_FORWARD_CORRECTED 21
+#define ROVERMOVE_REVERSE 22
+#define ROVERMOVE_TURN_LEFT 23
+#define ROVERMOVE_TURN_RIGHT 24
+#define ROVERMOVE_STOP 25
+
+//movement algorithm states
+#define ALG_FORWARD 30
+#define ALG_STOPPED	31
+#define ALG_AGAINST_OBSTACLE 32
+#define ALG_ON_CORNER 33
+#define ALG_CLEARING 34

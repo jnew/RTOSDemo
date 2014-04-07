@@ -107,10 +107,14 @@ void clearData(sensorMsg *Msg)
 static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	sensorStruct *param = (sensorStruct *) pvParameters;
 	sensorMsg msg;
+	uint8_t algState = ALG_STOPPED;
+	uint8_t moveComm = ROVERMOVE_FORWARD_CORRECTED;
 
 	const uint8_t gatherReq[]= {0xAA};
 	const uint8_t gatherCheck[]= {0xAB};
-	const uint8_t motorCheck[]= {0xBB};
+	const uint8_t moveAckCheck[]= {0xBB};
+	const uint8_t moveProgCheck[] = {0xCA};
+	const uint8_t moveProgCheckCheck[] = {0xCB};
 	
 	SendLCDPrintMsg(param->lcdData,20,"sensorTask Init",portMAX_DELAY);
 	
@@ -140,16 +144,52 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 			}
 			//1 is incoming i2c data, this is where we handle sensor data and call algorithm subroutines... hopefully
 			case SENSORVALUE_MSG: {
-				uint8_t *dataPtr = getData(&msg);
+				uint8_t *sensorFrame = getData(&msg);
 				SendLCDPrintMsg(param->lcdData,20,"RCV: Sensor Data",portMAX_DELAY);
 				
-				
-				
+				uint8_t distance = 0;
 				//this is where the movement algorithm will decide what to issue as a command
-
-
-				//SendsensorGatherMsg(param);
-				SendmotorMoveMsg(param->motorData, SENSORTASK_MSG, dataPtr, portMAX_DELAY);
+				switch (algState) {
+					case ALG_STOPPED: {
+					moveComm = ROVERMOVE_FORWARD_CORRECTED;
+					algState = ALG_FORWARD;
+					break;
+					}
+					case ALG_FORWARD: {
+					if(sensorFrame[2] >= 0x5A && sensorFrame[3] >= 0x5A) {
+						moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+						distance = 45;
+						algState = ALG_CLEARING;
+					} else if(sensorFrame[1] <= 0x5A) {
+						moveComm = ROVERMOVE_TURN_LEFT;
+						algState = ALG_AGAINST_OBSTACLE;
+					}
+					break;
+					}
+					case ALG_CLEARING: {
+						moveComm = ROVERMOVE_TURN_RIGHT;
+						algState = ALG_ON_CORNER;
+					break;
+					}
+					case ALG_AGAINST_OBSTACLE: {
+						moveComm = ROVERMOVE_FORWARD_CORRECTED;
+						algState = ALG_FORWARD;
+					break;
+					}
+					case ALG_ON_CORNER: {
+					if(sensorFrame[2] <= 0x5A && sensorFrame[3] <= 0x5A) {
+						moveComm = ROVERMOVE_FORWARD_CORRECTED;
+						algState = ALG_FORWARD;
+					} else {
+						moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+						distance = 45;
+					}
+					break;
+					}
+				}
+				
+				
+				SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
 			break;
 			}
 			//bad/no data from the rover, we need to regather
@@ -159,11 +199,25 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 			break;
 			}
 			case ROVERACK_CHECK: {
-				if (vtI2CEnQ(param->dev,vtRoverMovementCheck,0x4F,sizeof(motorCheck),motorCheck,3) != pdTRUE) {
+				if (vtI2CEnQ(param->dev,vtRoverMovementCommandAckCheck,0x4F,sizeof(moveAckCheck),moveAckCheck,3) != pdTRUE) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+				SendLCDPrintMsg(param->lcdData,20,"SND: Ack Check",portMAX_DELAY);
+			break;
+			}
+			case ROVERMOVE_CHECK: {
+				if (vtI2CEnQ(param->dev,vtRoverMovementProgCheck,0x4F,sizeof(moveProgCheck),moveProgCheck,3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
 				SendLCDPrintMsg(param->lcdData,20,"SND: Move Check",portMAX_DELAY);
-			break;
+				break;
+			}
+			case ROVERMOVE_CHECKCHECK: {
+				if (vtI2CEnQ(param->dev,vtRoverMovementProgCheckCheck,0x4F,sizeof(moveProgCheckCheck),moveProgCheckCheck,6) != pdTRUE) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+				SendLCDPrintMsg(param->lcdData,20,"SND: Move ChkChk",portMAX_DELAY);
+				break;
 			}
 			case ROVERMOVE_MSG: {
 				SendLCDPrintMsg(param->lcdData,20,"RCV: Move Data",portMAX_DELAY);
@@ -171,8 +225,9 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				
 				//this is where the actual movement will be recorded in the map	
 
-
-				SendsensorGatherMsg(param);
+				uint8_t *dataPtr = getData(&msg);
+				if(dataPtr[1] == 0x01)
+					SendsensorGatherMsg(param);
 			break;
 			}
 		}

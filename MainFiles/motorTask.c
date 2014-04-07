@@ -23,7 +23,8 @@
 
 typedef struct {
 	uint8_t msgType;
-	uint8_t data[4];
+	uint8_t moveType;
+	uint8_t distance; //in cm
 } motorMsg;
 
 static portTASK_FUNCTION_PROTO( vmotorTask, pvParameters );
@@ -42,7 +43,7 @@ void vStartmotorTask(motorStruct *params ,unsigned portBASE_TYPE uxPriority, vtI
 	}
 }
 
-portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData,uint8_t length,uint8_t* value,portTickType ticksToBlock)
+portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData, uint8_t moveType, uint8_t distance, portTickType ticksToBlock)
 {
 	motorMsg moveMsg;
 
@@ -50,10 +51,8 @@ portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData,uint8_t length,uint8_t* va
 		VT_HANDLE_FATAL_ERROR(0);
 	}
 	moveMsg.msgType = SENSORTASK_MSG;
-	uint8_t i;
-	for( i = 0; i < length; i = i+1) {
-		moveMsg.data[i] = value[i];
-	}
+	moveMsg.moveType = moveType;
+	moveMsg.distance = distance;
 	return(xQueueSend(motorData->inQ,(void *) (&moveMsg),ticksToBlock));
 }
 
@@ -69,28 +68,33 @@ portBASE_TYPE SendmotorERRORMsg(motorStruct *motorData, uint8_t errorType, portT
 	return(xQueueSend(motorData->inQ,(void *) (&errorMsg),ticksToBlock));
 }
 
-int getMsgType(motorMsg *Msg)
+uint8_t getMsgType(motorMsg *Msg)
 {
 	return(Msg->msgType);
 }
 
-uint8_t* getData(motorMsg *Msg)
+uint8_t getMoveType(motorMsg *Msg)
 {
-	return (uint8_t *) &Msg->data[0];
+	return(Msg->moveType);
+}
+
+uint8_t getDistance(motorMsg *Msg)
+{
+	return(Msg->distance);
 }
 
 static portTASK_FUNCTION(vmotorTask, pvParameters) {
 	motorStruct *param = (motorStruct *) pvParameters;
 	motorMsg msg;
+
+	const uint8_t bc_half_forward[] = {0xBC, 0xA0, 0x20, 0xFF, 0xFF, 0x00};
+    const uint8_t ba_15cm_forward[] = {0xBA, 0xA0, 0x20, 0x0F, 0x0F, 0x00};  // 0.5ft
+    const uint8_t ba_45cm_forward[] = {0xBA, 0xA0, 0x20, 0x2D, 0x2D, 0x00};  // 1.5ft
+    const uint8_t ba_90_left[] = {0xBA, 0xE0, 0x20, 0x12, 0x12, 0x00};
+    const uint8_t ba_90_right[] = {0xBA, 0xA0, 0x60, 0x12, 0x12, 0x00};
+	uint8_t ba_custom_forward[] = {0xBA, 0xA0, 0x20, 0x2D, 0x2D, 0x00};
 	
-	const uint8_t *motorCommand;
-	const uint8_t forward_ten[]= {0xBA, 0x9F, 0x1F, 0x64, 0x00};
-	const uint8_t forward_five[]= {0xBA, 0x9F, 0x1F, 0x32, 0x00};
-	const uint8_t turn_right[]= {0xBA, 0x9F, 0x62, 0x0B, 0x00};
-	const uint8_t turn_left[]= {0xBA, 0xE1, 0x1F, 0x0B, 0x00};
-	const uint8_t backwards_five[]= {0xBA, 0xE1, 0x62, 0x32, 0x00};
-	const uint8_t stop[]= {0xBA, 0x00, 0x00, 0x00, 0x00};
-	unsigned int demoInt = 0;
+	const uint8_t *motorCommand = bc_half_forward;
 	
 	SendLCDPrintMsg(param->lcdData,20,"motorTask Init",portMAX_DELAY);
 	
@@ -104,42 +108,35 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 			//only one type of message so far
 			case SENSORTASK_MSG: {
 
-
-				
-				//this is where the motorTask will translate from human readable movement to block of sabertooth stuff
-
-
-
+				switch(getMoveType(&msg)) {
+					case ROVERMOVE_FORWARD_ABSOLUTE:
+						motorCommand = ba_custom_forward;
+						uint8_t distance = getDistance(&msg);
+						ba_custom_forward[3] = distance;
+						ba_custom_forward[4] = distance;
+						break;
+					case ROVERMOVE_FORWARD_CORRECTED:
+						motorCommand = bc_half_forward;
+						break;
+					case ROVERMOVE_TURN_LEFT:
+						motorCommand = ba_90_left;
+						break;
+					case ROVERMOVE_TURN_RIGHT:
+						motorCommand = ba_90_right;
+						break;
+				}
 				//current slave address is 0x4F, take note
-				if(demoInt == 0)
-					motorCommand = forward_ten;
-				else if(demoInt == 1)
-					motorCommand = turn_left;
-				else if (demoInt == 2)
-					motorCommand = forward_five;
-				else
-					motorCommand = stop;
-				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F, 5, motorCommand, 3) != pdTRUE) {
+				if (vtI2CEnQ(param->dev, vtRoverMovementCommand, 0x4F, 6, motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
-				demoInt = demoInt + 1;
 				SendLCDPrintMsg(param->lcdData,20,"SND: Move Command",portMAX_DELAY);
 			break;
 			}
 			case ROVERACK_ERROR: {
 				//this is where the arm will re-request the movement ack from the rover
-				if(demoInt == 0)
-					motorCommand = forward_ten;
-				else if(demoInt == 1)
-					motorCommand = turn_left;
-				else if (demoInt == 2)
-					motorCommand = forward_five;
-				else
-					motorCommand = stop;
-				if (vtI2CEnQ(param->dev,vtRoverMovementCommand,0x4F, 5, motorCommand, 3) != pdTRUE) {
+				if (vtI2CEnQ(param->dev, vtRoverMovementCommand, 0x4F, 6, motorCommand, 3) != pdTRUE) {
 					VT_HANDLE_FATAL_ERROR(0);
 				}
-				demoInt = demoInt + 1;
 				SendLCDPrintMsg(param->lcdData,20,"RSND: Move Command",portMAX_DELAY);
 			break;
 			}

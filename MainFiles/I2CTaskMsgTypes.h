@@ -18,5 +18,7 @@
 #define vtMS1ADCRequest 8
 #define vtSensorGatherCheck 9
 #define vtRoverMovementCommand 10
-#define vtRoverMovementCheck 11
+#define vtRoverMovementCommandAckCheck 11
+#define vtRoverMovementProgCheck 12
+#define vtRoverMovementProgCheckCheck 13
 #endif

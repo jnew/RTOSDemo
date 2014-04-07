@@ -73,7 +73,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 	motorStruct *motorData = param->motorData;
 	
 	uint8_t recvMsgType;
-	uint8_t timeOutCount;
+	uint8_t timeOutCount = 0;
 
 	// Like all good tasks, this should never exit
 	for(;;)
@@ -140,8 +140,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 			}
 			break;
 		}
-		case vtRoverMovementCheck: {
-		//this will comm with the motorTask
+		case vtRoverMovementCommandAckCheck: {
 			if(timeOutCount > 20) { 
 				if (xTimerStop(sensorData->checkTimerHandle,0) != pdPASS) {
 					VT_HANDLE_FATAL_ERROR(0);
@@ -158,9 +157,39 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 					VT_HANDLE_FATAL_ERROR(0);
 				}
 				timeOutCount = 0;
-				SendsensorValueMsg(sensorData, ROVERMOVE_MSG, 2, valPtr, portMAX_DELAY);
-				break;
+				SendsensorValueMsg(sensorData, ROVERMOVE_CHECK, 0, valPtr, portMAX_DELAY);
 			}
+				break;
+		}
+		case vtRoverMovementProgCheck: {
+			if(valPtr[0] == 0x05) {
+				timeOutCount = 0;
+				sensorData->checkType = ROVERMOVE_CHECKCHECK;
+				if (xTimerStart(sensorData->checkTimerHandle,0) != pdPASS) {
+					VT_HANDLE_FATAL_ERROR(0);
+				}
+			} else {
+				SendsensorValueMsg(sensorData, ROVERMOVE_CHECK, 0, valPtr, portMAX_DELAY);
+			}	
+			break;
+		}
+		case vtRoverMovementProgCheckCheck: {
+			timeOutCount += 1;
+			if(valPtr[0] == 0x04) {
+				if(valPtr[1] == 0x01) {
+					if (xTimerStop(sensorData->checkTimerHandle,0) != pdPASS) {
+							VT_HANDLE_FATAL_ERROR(0);
+						}
+					timeOutCount = 0;
+				}
+				SendsensorValueMsg(sensorData, ROVERMOVE_MSG, 6, valPtr, portMAX_DELAY);
+				sensorData->checkType = ROVERMOVE_CHECK;
+			}
+			if(timeOutCount == 10) {
+				sensorData->checkType = ROVERMOVE_CHECK;
+				timeOutCount = 0;
+			}
+		break;
 		}
 		default: {
 			VT_HANDLE_FATAL_ERROR(recvMsgType);
