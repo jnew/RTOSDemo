@@ -48,6 +48,8 @@ portBASE_TYPE SendLCDTimerMsg(vtLCDStruct *lcdData,portTickType ticksElapsed,por
 //   Result of the call to xQueueSend()
 portBASE_TYPE SendLCDPrintMsg(vtLCDStruct *lcdData,int length,char *pString,portTickType ticksToBlock);
 
+portBASE_TYPE SendLCDStateMsg(vtLCDStruct *lcdData, uint8_t state,portTickType ticksToBlock);
+
 //john's attempt to create ADC datapath																									   
 portBASE_TYPE SendLCDADC(vtLCDStruct *lcdData,int length, uint8_t *value,portTickType ticksToBlock);
 /* ********************************************************************* */

@@ -12,6 +12,7 @@
 #include "LCDtask.h"
 #include "string.h"
 #include "lpc17xx_gpio.h"
+#include "messageDefs.h"
 
 #define USE_MS1_CODE 0
 
@@ -36,6 +37,8 @@
 #define LCDMsgTypePrint 2
 // adc data
 #define LCDMsgTypeADC 3
+
+#define LCDMsgTypeState 4
 // actual data structure that is sent in a message
 typedef struct __vtLCDMsg {
 	uint8_t msgType;
@@ -97,6 +100,18 @@ portBASE_TYPE SendLCDPrintMsg(vtLCDStruct *lcdData,int length,char *pString,port
 	lcdBuffer.length = strnlen(pString,vtLCDMaxLen);
 	lcdBuffer.msgType = LCDMsgTypePrint;
 	strncpy((char *)lcdBuffer.buf,pString,vtLCDMaxLen);
+	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
+}
+
+portBASE_TYPE SendLCDStateMsg(vtLCDStruct *lcdData,uint8_t state,portTickType ticksToBlock)
+{
+	if (lcdData == NULL) {
+		VT_HANDLE_FATAL_ERROR(0);
+	}
+	vtLCDMsg lcdBuffer;
+
+	lcdBuffer.length = state;
+	lcdBuffer.msgType = LCDMsgTypeState;
 	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
 }
 
@@ -169,6 +184,15 @@ void initGraph()
    	GLCD_DisplayString(29, 13, 0, (unsigned char* )"Y: Volts (1V), X: Time (10ms)");
 }
 
+void initReadout()
+{  	
+	int i;
+	for(i = 0; i < 320; i = i+1) {
+		GLCD_PutPixel(i, 65);
+	}
+   	GLCD_DisplayString(29, 13, 0, (unsigned char* )"Y: Volts (1V), X: Time (10ms)");
+}
+
 // End of private routines for message buffers
 
 // If LCD_EXAMPLE_OP=0, then accept messages that may be timer or print requests and respond accordingly
@@ -229,8 +253,9 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 	#if USE_MS1_CODE == 1
 	initGraph();
 	#endif
+	initReadout();
 
-	curLine = 0;
+	curLine = 3;
 	curFrame = 0;
 	// This task should never exit
 	for(;;)
@@ -269,10 +294,47 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 			// show the text
 			GLCD_DisplayString(curLine,0,1,(unsigned char *)lineBuffer);
 			curLine++;
-			if (curLine == 6) {
+			if (curLine == 10) {
 				//GLCD_Clear(screenColor);
-				curLine = 0;
+				curLine = 3;
 			}
+			break;
+		}
+		case LCDMsgTypeState: {
+			char   *lineBuffer;
+			int ceil_halflen = 0;
+			switch (getMsgLength(&msgBuffer)) {
+			case ALG_FORWARD:
+				lineBuffer = "FORWARD";
+				ceil_halflen = 4;
+				break;
+			case ALG_STOPPED:
+				lineBuffer = "STOPPED";
+				ceil_halflen = 4;
+				break;
+			case ALG_AGAINST_OBSTACLE:
+				lineBuffer = "AGAINST_OBSTACLE";
+				ceil_halflen = 8;
+				break;
+			case ALG_CLEARING:
+				lineBuffer = "CLEARING";
+				ceil_halflen = 4;
+				break;
+			case ALG_ON_CORNER:
+				lineBuffer = "ON_CORNER";
+				ceil_halflen = 5;
+				break;
+			default:
+				lineBuffer = "ERROR";
+				ceil_halflen = 3;
+				break;
+			}
+			// clear the line
+			GLCD_ClearLn(1,1);
+			//center the text
+			int centering = 10-ceil_halflen;
+			// show the text
+			GLCD_DisplayString(1,centering,1,(unsigned char *)lineBuffer);
 			break;
 		}
 		case LCDMsgTypeTimer: {

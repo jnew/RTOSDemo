@@ -117,7 +117,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	const uint8_t moveProgCheckCheck[] = {0xCB};
 	
 	SendLCDPrintMsg(param->lcdData,20,"sensorTask Init",portMAX_DELAY);
-	
+	SendLCDStateMsg(param->lcdData,algState,portMAX_DELAY);
 	
 	for( ;; ) {
 		//wait forever or until queue has something
@@ -126,7 +126,6 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 		}
 
 		switch(getMsgType(&msg)) {
-			//0 is gather, send an I2C request out
 			case GATHER_MSG: {
 				//current slave address is 0x4F, take note
 					if (vtI2CEnQ(param->dev,vtSensorGatherRequest,0x4F,sizeof(gatherReq),gatherReq,3) != pdTRUE)
@@ -188,7 +187,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 					}
 				}
 				
-				
+				SendLCDStateMsg(param->lcdData,algState,portMAX_DELAY);
 				SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
 			break;
 			}
