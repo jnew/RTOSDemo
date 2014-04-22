@@ -18,6 +18,8 @@
 
 #define i2cSTACK_SIZE		(5*configMINIMAL_STACK_SIZE)
 
+static xQueueHandle staticHandle;
+
 typedef struct {
 	uint8_t msgType;
 	uint8_t data[4];
@@ -30,7 +32,7 @@ void vStartsensorTask(sensorStruct *params ,unsigned portBASE_TYPE uxPriority, v
 	if ((params->inQ = xQueueCreate(20,sizeof(sensorMsg))) == NULL) {
 		VT_HANDLE_FATAL_ERROR(0);
 	}
-
+	staticHandle = params->inQ;
 	portBASE_TYPE retval;
 	params->dev = i2c;
 	params->lcdData = lcd;
@@ -47,7 +49,15 @@ portBASE_TYPE SendsensorGatherMsg(sensorStruct *sensorData)
 	}
 	sensorMsg gatherMsg;
 	gatherMsg.msgType = GATHER_MSG;
-	return(xQueueSend(sensorData->inQ,(void *) (&gatherMsg),portMAX_DELAY));
+	return(xQueueSend(staticHandle,(void *) (&gatherMsg),portMAX_DELAY));
+}
+
+portBASE_TYPE SendsensorMacroOverride(uint8_t state)
+{
+	sensorMsg newState;
+	newState.data[0] = state;
+	newState.msgType = MACROSTATE_OVERRIDE;
+	return(xQueueSend(staticHandle,(void *) (&newState),portMAX_DELAY));
 }
 
 portBASE_TYPE SendmessageCheck(sensorStruct *sensorData)
@@ -104,10 +114,52 @@ void clearData(sensorMsg *Msg)
 		Msg->data[i] = 0;
 }
 
+void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uint8_t *distance) {
+	switch (*algState) {
+		case ALG_STOPPED: {
+		*moveComm = ROVERMOVE_FORWARD_CORRECTED;
+		*algState = ALG_FORWARD;
+		break;
+		}
+		case ALG_FORWARD: {
+		if(sensorFrame[2] >= 0x5A && sensorFrame[3] >= 0x5A) {
+			*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+			*distance = 45;
+			*algState = ALG_CLEARING;
+		} else if(sensorFrame[1] <= 0x5A) {
+			*moveComm = ROVERMOVE_TURN_LEFT;
+			*algState = ALG_AGAINST_OBSTACLE;
+		}
+		break;
+		}
+		case ALG_CLEARING: {
+			*moveComm = ROVERMOVE_TURN_RIGHT;
+			*algState = ALG_ON_CORNER;
+		break;
+		}
+		case ALG_AGAINST_OBSTACLE: {
+			*moveComm = ROVERMOVE_FORWARD_CORRECTED;
+			*algState = ALG_FORWARD;
+		break;
+		}
+		case ALG_ON_CORNER: {
+		if(sensorFrame[2] <= 0x5A && sensorFrame[3] <= 0x5A) {
+			*moveComm = ROVERMOVE_FORWARD_CORRECTED;
+			*algState = ALG_FORWARD;
+		} else {
+			*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+			*distance = 45;
+		}
+		break;
+		}
+	}
+}
+
 static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	sensorStruct *param = (sensorStruct *) pvParameters;
 	sensorMsg msg;
 	uint8_t algState = ALG_STOPPED;
+	uint8_t macroState = MACROSTATE_IDLE;
 	uint8_t moveComm = ROVERMOVE_FORWARD_CORRECTED;
 
 	const uint8_t gatherReq[]= {0xAA};
@@ -117,7 +169,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	const uint8_t moveProgCheckCheck[] = {0xCB};
 	
 	SendLCDPrintMsg(param->lcdData,20,"sensorTask Init",portMAX_DELAY);
-	SendLCDStateMsg(param->lcdData,algState,portMAX_DELAY);
+	SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
 	
 	for( ;; ) {
 		//wait forever or until queue has something
@@ -148,47 +200,30 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				
 				uint8_t distance = 0;
 				//this is where the movement algorithm will decide what to issue as a command
-				switch (algState) {
-					case ALG_STOPPED: {
-					moveComm = ROVERMOVE_FORWARD_CORRECTED;
-					algState = ALG_FORWARD;
-					break;
-					}
-					case ALG_FORWARD: {
-					if(sensorFrame[2] >= 0x5A && sensorFrame[3] >= 0x5A) {
-						moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
-						distance = 45;
-						algState = ALG_CLEARING;
-					} else if(sensorFrame[1] <= 0x5A) {
-						moveComm = ROVERMOVE_TURN_LEFT;
-						algState = ALG_AGAINST_OBSTACLE;
-					}
-					break;
-					}
-					case ALG_CLEARING: {
-						moveComm = ROVERMOVE_TURN_RIGHT;
-						algState = ALG_ON_CORNER;
-					break;
-					}
-					case ALG_AGAINST_OBSTACLE: {
-						moveComm = ROVERMOVE_FORWARD_CORRECTED;
-						algState = ALG_FORWARD;
-					break;
-					}
-					case ALG_ON_CORNER: {
-					if(sensorFrame[2] <= 0x5A && sensorFrame[3] <= 0x5A) {
-						moveComm = ROVERMOVE_FORWARD_CORRECTED;
-						algState = ALG_FORWARD;
-					} else {
-						moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
-						distance = 45;
-					}
-					break;
-					}
+				switch (macroState) {
+					case MACROSTATE_IDLE:
+						SendsensorGatherMsg(param);
+						SendLCDStateMsg(param->lcdData, algState, macroState, portMAX_DELAY);
+						break;
+					case MACROSTATE_FINDING_LINE:
+						algFunction(sensorFrame, &algState, &moveComm, &distance);
+						SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
+						SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
+						break;
+					case MACROSTATE_RUN_ONE:
+						algFunction(sensorFrame, &algState, &moveComm, &distance);
+						SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
+						SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
+						break;
 				}
 				
-				SendLCDStateMsg(param->lcdData,algState,portMAX_DELAY);
-				SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
+				//SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
+			break;
+			}
+			case MACROSTATE_OVERRIDE: {
+			uint8_t *newState = getData(&msg);
+			macroState = newState[0];
+			SendLCDPrintMsg(param->lcdData,20,"OVERRIDE OVERRIDE",portMAX_DELAY);
 			break;
 			}
 			//bad/no data from the rover, we need to regather

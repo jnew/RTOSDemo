@@ -22,6 +22,8 @@ void vStartsensorTask(sensorStruct *sensorData ,unsigned portBASE_TYPE uxPriorit
 portBASE_TYPE SendmessageCheck(sensorStruct *sensorData);
 
 portBASE_TYPE SendsensorGatherMsg(sensorStruct *sensorData);
+
+portBASE_TYPE SendsensorMacroOverride(uint8_t state);
 //send message from conductor with i2c data from pic
 portBASE_TYPE SendsensorValueMsg(sensorStruct *sensorData,uint8_t msgtype, uint8_t length,uint8_t* value,portTickType ticksToBlock);
 //send message that there was an error on the i2c bus

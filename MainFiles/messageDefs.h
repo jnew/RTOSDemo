@@ -4,6 +4,7 @@
 #define SENSORVALUE_MSG 2
 #define ROVERMOVE_MSG 3
 #define GATHER_ERROR_MSG 4
+#define MACROSTATE_OVERRIDE 5
 
 //message types for motorTask
 #define SENSORTASK_MSG 10
@@ -26,3 +27,9 @@
 #define ALG_AGAINST_OBSTACLE 32
 #define ALG_ON_CORNER 33
 #define ALG_CLEARING 34
+
+//macroState states
+#define MACROSTATE_IDLE 40
+#define MACROSTATE_FINDING_LINE 41
+#define MACROSTATE_RUN_ONE 42
+#define MACROSTATE_FINISHED 43

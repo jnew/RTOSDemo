@@ -103,14 +103,15 @@ portBASE_TYPE SendLCDPrintMsg(vtLCDStruct *lcdData,int length,char *pString,port
 	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
 }
 
-portBASE_TYPE SendLCDStateMsg(vtLCDStruct *lcdData,uint8_t state,portTickType ticksToBlock)
+portBASE_TYPE SendLCDStateMsg(vtLCDStruct *lcdData,uint8_t algState, uint8_t macroState, portTickType ticksToBlock)
 {
 	if (lcdData == NULL) {
 		VT_HANDLE_FATAL_ERROR(0);
 	}
 	vtLCDMsg lcdBuffer;
 
-	lcdBuffer.length = state;
+	lcdBuffer.buf[0] = algState;
+	lcdBuffer.buf[1] = macroState;
 	lcdBuffer.msgType = LCDMsgTypeState;
 	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
 }
@@ -301,40 +302,61 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 			break;
 		}
 		case LCDMsgTypeState: {
-			char   *lineBuffer;
-			int ceil_halflen = 0;
-			switch (getMsgLength(&msgBuffer)) {
+			uint8_t   alg = msgBuffer.buf[0];
+			uint8_t   mac = msgBuffer.buf[1];
+			char   *macroState;
+			char   *algState;
+			int ceil_halflen[] = {0,0};
+			switch (alg) {
 			case ALG_FORWARD:
-				lineBuffer = "FORWARD";
-				ceil_halflen = 4;
+				algState = "FORWARD";
+				ceil_halflen[0] = 4;
 				break;
 			case ALG_STOPPED:
-				lineBuffer = "STOPPED";
-				ceil_halflen = 4;
+				algState = "STOPPED";
+				ceil_halflen[0] = 4;
 				break;
 			case ALG_AGAINST_OBSTACLE:
-				lineBuffer = "AGAINST_OBSTACLE";
-				ceil_halflen = 8;
+				algState = "AGAINST_OBSTACLE";
+				ceil_halflen[0] = 8;
 				break;
 			case ALG_CLEARING:
-				lineBuffer = "CLEARING";
-				ceil_halflen = 4;
+				algState = "CLEARING";
+				ceil_halflen[0] = 4;
 				break;
 			case ALG_ON_CORNER:
-				lineBuffer = "ON_CORNER";
-				ceil_halflen = 5;
+				algState = "ON_CORNER";
+				ceil_halflen[0] = 5;
 				break;
 			default:
-				lineBuffer = "ERROR";
-				ceil_halflen = 3;
+				algState = "ERROR";
+				ceil_halflen[0] = 3;
+				break;
+			}
+			switch (mac) {
+			case MACROSTATE_IDLE:
+				macroState = "IDLE";
+				ceil_halflen[1] = 2;
+				break;
+			case MACROSTATE_FINDING_LINE:
+				macroState = "FINDING_LINE";
+				ceil_halflen[1] = 6;
+				break;
+			case MACROSTATE_RUN_ONE:
+				macroState = "RUN_ONE";
+				ceil_halflen[1] = 4;
+				break;
+			case MACROSTATE_FINISHED:
+				macroState = "FINISHED";
+				ceil_halflen[1] = 4;
 				break;
 			}
 			// clear the line
 			GLCD_ClearLn(1,1);
-			//center the text
-			int centering = 10-ceil_halflen;
+			GLCD_ClearLn(0,1);
 			// show the text
-			GLCD_DisplayString(1,centering,1,(unsigned char *)lineBuffer);
+			GLCD_DisplayString(1,10-ceil_halflen[0],1,(unsigned char *)algState);
+			GLCD_DisplayString(0,10-ceil_halflen[1],1,(unsigned char *)macroState);
 			break;
 		}
 		case LCDMsgTypeTimer: {
