@@ -16,9 +16,10 @@
 #include "lpc17xx_gpio.h"
 #include "messageDefs.h"
 
-#define i2cSTACK_SIZE		(5*configMINIMAL_STACK_SIZE)
+#define i2cSTACK_SIZE		(8*configMINIMAL_STACK_SIZE)
 
 static xQueueHandle staticHandle;
+static uint8_t macroState = MACROSTATE_IDLE;
 
 typedef struct {
 	uint8_t msgType;
@@ -122,11 +123,31 @@ void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uin
 		break;
 		}
 		case ALG_FORWARD: {
-		if(sensorFrame[2] >= 0x5A && sensorFrame[3] >= 0x5A) {
+		if(sensorFrame[4] == 0x01) {
+			//CROSSED STARTING LINE
+			if(macroState == MACROSTATE_FINDING_LINE) {
+				macroState = MACROSTATE_RUN_ONE;
+				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+				*distance = 10;
+				//start run one timer
+			} else if(macroState == MACROSTATE_RUN_ONE) {
+				//stop run one timer
+				macroState = MACROSTATE_RUN_TWO;
+				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+				*distance = 10;
+				//start run two timer
+			} else if(macroState == MACROSTATE_RUN_TWO) {
+				//stop run two timer
+				macroState = MACROSTATE_FINISHED;
+				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
+				*distance = 1;
+				//we are done
+			}
+		} else if(sensorFrame[2] == 0x04 && sensorFrame[3] == 0x04) {
 			*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
-			*distance = 45;
+			*distance = 12;
 			*algState = ALG_CLEARING;
-		} else if(sensorFrame[1] <= 0x5A) {
+		} else if(sensorFrame[1] == 0x01) {
 			*moveComm = ROVERMOVE_TURN_LEFT;
 			*algState = ALG_AGAINST_OBSTACLE;
 		}
@@ -143,12 +164,13 @@ void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uin
 		break;
 		}
 		case ALG_ON_CORNER: {
-		if(sensorFrame[2] <= 0x5A && sensorFrame[3] <= 0x5A) {
+		if(sensorFrame[2] != 0x04 && sensorFrame[3] != 0x04) {
 			*moveComm = ROVERMOVE_FORWARD_CORRECTED;
 			*algState = ALG_FORWARD;
+		} else if(sensorFrame[1] == 0x01) {
+			*moveComm = ROVERMOVE_TURN_LEFT;
 		} else {
-			*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
-			*distance = 45;
+			*moveComm = ROVERMOVE_FORWARD_SPECIALD;
 		}
 		break;
 		}
@@ -159,7 +181,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	sensorStruct *param = (sensorStruct *) pvParameters;
 	sensorMsg msg;
 	uint8_t algState = ALG_STOPPED;
-	uint8_t macroState = MACROSTATE_IDLE;
+//	uint8_t nextState = MACROSTATE_IDLE;
 	uint8_t moveComm = ROVERMOVE_FORWARD_CORRECTED;
 
 	const uint8_t gatherReq[]= {0xAA};
@@ -176,7 +198,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 		if (xQueueReceive(param->inQ,(void *) &msg,portMAX_DELAY) != pdTRUE) {
 			VT_HANDLE_FATAL_ERROR(0);
 		}
-
+		SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
 		switch(getMsgType(&msg)) {
 			case GATHER_MSG: {
 				//current slave address is 0x4F, take note
@@ -203,17 +225,17 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				switch (macroState) {
 					case MACROSTATE_IDLE:
 						SendsensorGatherMsg(param);
-						SendLCDStateMsg(param->lcdData, algState, macroState, portMAX_DELAY);
+						//SendLCDStateMsg(param->lcdData, algState, macroState, portMAX_DELAY);
 						break;
 					case MACROSTATE_FINDING_LINE:
 						algFunction(sensorFrame, &algState, &moveComm, &distance);
-						SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
-						SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
+						//SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
+						SendmotorMoveMsg(param->motorData, moveComm, distance, macroState, portMAX_DELAY);
 						break;
 					case MACROSTATE_RUN_ONE:
 						algFunction(sensorFrame, &algState, &moveComm, &distance);
-						SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
-						SendmotorMoveMsg(param->motorData, moveComm, distance, portMAX_DELAY);
+						//SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
+						SendmotorMoveMsg(param->motorData, moveComm, distance, macroState, portMAX_DELAY);
 						break;
 				}
 				

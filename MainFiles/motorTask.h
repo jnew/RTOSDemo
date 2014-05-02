@@ -14,6 +14,6 @@ typedef struct {
 
 void vStartmotorTask(motorStruct *motorData ,unsigned portBASE_TYPE uxPriority, vtI2CStruct *i2c, vtLCDStruct *lcd);
 //send message from sensorTask to motorTask
-portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData, uint8_t moveType, uint8_t distance, portTickType ticksToBlock);
+portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData, uint8_t moveType, uint8_t distance, uint8_t state, portTickType ticksToBlock);
 portBASE_TYPE SendmotorERRORMsg(motorStruct *motorData, uint8_t errorType, portTickType ticksToBlock);
 #endif

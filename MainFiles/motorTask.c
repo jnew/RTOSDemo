@@ -25,6 +25,7 @@ typedef struct {
 	uint8_t msgType;
 	uint8_t moveType;
 	uint8_t distance; //in cm
+	uint8_t macroState;
 } motorMsg;
 
 static portTASK_FUNCTION_PROTO( vmotorTask, pvParameters );
@@ -43,7 +44,7 @@ void vStartmotorTask(motorStruct *params ,unsigned portBASE_TYPE uxPriority, vtI
 	}
 }
 
-portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData, uint8_t moveType, uint8_t distance, portTickType ticksToBlock)
+portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData, uint8_t moveType, uint8_t distance, uint8_t state, portTickType ticksToBlock)
 {
 	motorMsg moveMsg;
 
@@ -53,6 +54,7 @@ portBASE_TYPE SendmotorMoveMsg(motorStruct *motorData, uint8_t moveType, uint8_t
 	moveMsg.msgType = SENSORTASK_MSG;
 	moveMsg.moveType = moveType;
 	moveMsg.distance = distance;
+	moveMsg.macroState = state;
 	return(xQueueSend(motorData->inQ,(void *) (&moveMsg),ticksToBlock));
 }
 
@@ -88,8 +90,10 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 	motorMsg msg;
 
 	const uint8_t bc_half_forward[] = {0xBC, 0xA0, 0x20, 0xFF, 0xFF, 0x00};
-    const uint8_t ba_15cm_forward[] = {0xBA, 0xA0, 0x20, 0x0F, 0x0F, 0x00};  // 0.5ft
-    const uint8_t ba_45cm_forward[] = {0xBA, 0xA0, 0x20, 0x2D, 0x2D, 0x00};  // 1.5ft
+	const uint8_t bc_fast_forward[] = {0xBC, 0x9B, 0x1B, 0xFF, 0xFF, 0x00};
+	const uint8_t bd_half_forward[] = {0xBD, 0xA0, 0x20, 0xFF, 0xFF, 0x00};
+//    const uint8_t ba_15cm_forward[] = {0xBA, 0xA0, 0x20, 0x0F, 0x0F, 0x00};  // 0.5ft
+//    const uint8_t ba_45cm_forward[] = {0xBA, 0xA0, 0x20, 0x2D, 0x2D, 0x00};  // 1.5ft
     const uint8_t ba_90_left[] = {0xBA, 0xE0, 0x20, 0x12, 0x12, 0x00};
     const uint8_t ba_90_right[] = {0xBA, 0xA0, 0x60, 0x12, 0x12, 0x00};
 	uint8_t ba_custom_forward[] = {0xBA, 0xA0, 0x20, 0x2D, 0x2D, 0x00};
@@ -116,7 +120,10 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 						ba_custom_forward[4] = distance;
 						break;
 					case ROVERMOVE_FORWARD_CORRECTED:
-						motorCommand = bc_half_forward;
+						if(msg.macroState == MACROSTATE_RUN_TWO)
+							motorCommand = bc_fast_forward;
+						else
+							motorCommand = bc_half_forward;
 						break;
 					case ROVERMOVE_TURN_LEFT:
 						motorCommand = ba_90_left;
@@ -124,6 +131,8 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 					case ROVERMOVE_TURN_RIGHT:
 						motorCommand = ba_90_right;
 						break;
+					case ROVERMOVE_FORWARD_SPECIALD:
+						motorCommand = bd_half_forward;
 				}
 				//current slave address is 0x4F, take note
 				if (vtI2CEnQ(param->dev, vtRoverMovementCommand, 0x4F, 6, motorCommand, 3) != pdTRUE) {

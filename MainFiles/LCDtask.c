@@ -346,9 +346,17 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 				macroState = "RUN_ONE";
 				ceil_halflen[1] = 4;
 				break;
+			case MACROSTATE_RUN_TWO:
+				macroState = "RUN_TWO";
+				ceil_halflen[1] = 4;
+				break;
 			case MACROSTATE_FINISHED:
 				macroState = "FINISHED";
 				ceil_halflen[1] = 4;
+				break;
+			default:
+				macroState = "ERROR";
+				ceil_halflen[1] = 3;
 				break;
 			}
 			// clear the line

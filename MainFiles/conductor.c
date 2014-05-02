@@ -115,7 +115,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 				}
 				SendsensorERRORMsg(sensorData, GATHER_ERROR_MSG, portMAX_DELAY);
 				break;
-			} else if((rxLen != 5) || (valPtr[0] != 0x01) || (((valPtr[1]+valPtr[2]+valPtr[3])&0x17) != valPtr[4])) {//ERROR
+			} else if((rxLen != 5) || (valPtr[0] != 0x01) || (((valPtr[1]+valPtr[2]+valPtr[3]+valPtr[4])&0x17) != valPtr[5])) {//ERROR
 				timeOutCount = timeOutCount + 1;
 				break;
 			} else {
@@ -123,7 +123,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 					VT_HANDLE_FATAL_ERROR(0);
 				}
 				timeOutCount = 0;
-				SendsensorValueMsg(sensorData, SENSORVALUE_MSG, 4, valPtr, portMAX_DELAY);
+				SendsensorValueMsg(sensorData, SENSORVALUE_MSG, 5, valPtr, portMAX_DELAY);
 			}
 			break;
 		}
