@@ -104,7 +104,7 @@ void startTimerForADC(adcStruct *adcData) {
 
 /* *********************************************************** */
 // Functions for the check timer
-#define checkWRITE_RATE_BASE	( ( portTickType ) 200 / portTICK_RATE_MS)
+#define checkWRITE_RATE_BASE	( ( portTickType ) 100 / portTICK_RATE_MS)
 
 // Callback function that is called by the TemperatureTimer
 //   Sends a message to the queue that is read by the Temperature Task

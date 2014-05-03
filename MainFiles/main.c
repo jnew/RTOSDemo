@@ -150,13 +150,13 @@ tick hook). */
 #define mainINTEGER_TASK_PRIORITY           ( tskIDLE_PRIORITY)
 #define mainGEN_QUEUE_TASK_PRIORITY			( tskIDLE_PRIORITY)
 #define mainFLASH_TASK_PRIORITY				( tskIDLE_PRIORITY)
-#define mainLCD_TASK_PRIORITY				( tskIDLE_PRIORITY+1)
-#define mainADC_TASK_PRIORITY				( tskIDLE_PRIORITY+3)
+#define mainLCD_TASK_PRIORITY				( tskIDLE_PRIORITY)
+#define mainADC_TASK_PRIORITY				( tskIDLE_PRIORITY)
 #define mainUSB_TASK_PRIORITY				( tskIDLE_PRIORITY)
-#define mainI2CMONITOR_TASK_PRIORITY		( tskIDLE_PRIORITY+2)
-#define mainCONDUCTOR_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
-#define mainSENSOR_TASK_PRIORITY			( tskIDLE_PRIORITY+3)
-#define mainMOTOR_TASK_PRIORITY				( tskIDLE_PRIORITY+3)
+#define mainI2CMONITOR_TASK_PRIORITY		( tskIDLE_PRIORITY)
+#define mainCONDUCTOR_TASK_PRIORITY			( tskIDLE_PRIORITY)
+#define mainSENSOR_TASK_PRIORITY			( tskIDLE_PRIORITY)
+#define mainMOTOR_TASK_PRIORITY				( tskIDLE_PRIORITY)
 
 /* The WEB server has a larger stack as it utilises stack hungry string
 handling library calls. */

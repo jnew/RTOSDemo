@@ -19,7 +19,6 @@
 #define i2cSTACK_SIZE		(8*configMINIMAL_STACK_SIZE)
 
 static xQueueHandle staticHandle;
-static uint8_t macroState = MACROSTATE_IDLE;
 
 typedef struct {
 	uint8_t msgType;
@@ -115,7 +114,7 @@ void clearData(sensorMsg *Msg)
 		Msg->data[i] = 0;
 }
 
-void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uint8_t *distance) {
+void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uint8_t *macroState, uint8_t *distance) {
 	switch (*algState) {
 		case ALG_STOPPED: {
 		*moveComm = ROVERMOVE_FORWARD_CORRECTED;
@@ -125,27 +124,27 @@ void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uin
 		case ALG_FORWARD: {
 		if(sensorFrame[4] == 0x01) {
 			//CROSSED STARTING LINE
-			if(macroState == MACROSTATE_FINDING_LINE) {
-				macroState = MACROSTATE_RUN_ONE;
+			if(*macroState == MACROSTATE_FINDING_LINE) {
+				*macroState = MACROSTATE_RUN_ONE;
 				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
 				*distance = 10;
 				//start run one timer
-			} else if(macroState == MACROSTATE_RUN_ONE) {
+			} else if(*macroState == MACROSTATE_RUN_ONE) {
 				//stop run one timer
-				macroState = MACROSTATE_RUN_TWO;
+				*macroState = MACROSTATE_RUN_TWO;
 				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
 				*distance = 10;
 				//start run two timer
-			} else if(macroState == MACROSTATE_RUN_TWO) {
+			} else if(*macroState == MACROSTATE_RUN_TWO) {
 				//stop run two timer
-				macroState = MACROSTATE_FINISHED;
+				*macroState = MACROSTATE_FINISHED;
 				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
 				*distance = 1;
 				//we are done
 			}
 		} else if(sensorFrame[2] == 0x04 && sensorFrame[3] == 0x04) {
 			*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
-			*distance = 12;
+			*distance = 10;
 			*algState = ALG_CLEARING;
 		} else if(sensorFrame[1] == 0x01) {
 			*moveComm = ROVERMOVE_TURN_LEFT;
@@ -181,7 +180,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	sensorStruct *param = (sensorStruct *) pvParameters;
 	sensorMsg msg;
 	uint8_t algState = ALG_STOPPED;
-//	uint8_t nextState = MACROSTATE_IDLE;
+	uint8_t macroState = MACROSTATE_IDLE;
 	uint8_t moveComm = ROVERMOVE_FORWARD_CORRECTED;
 
 	const uint8_t gatherReq[]= {0xAA};
@@ -198,7 +197,6 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 		if (xQueueReceive(param->inQ,(void *) &msg,portMAX_DELAY) != pdTRUE) {
 			VT_HANDLE_FATAL_ERROR(0);
 		}
-		SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
 		switch(getMsgType(&msg)) {
 			case GATHER_MSG: {
 				//current slave address is 0x4F, take note
@@ -209,7 +207,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 			}
 			//this is a check for sensor data called by a timer callback
 			case GATHER_CHECK: {
-					if (vtI2CEnQ(param->dev,vtSensorGatherCheck,0x4F,sizeof(gatherCheck),gatherCheck,5) != pdTRUE) {
+					if (vtI2CEnQ(param->dev,vtSensorGatherCheck,0x4F,sizeof(gatherCheck),gatherCheck,6) != pdTRUE) {
 						VT_HANDLE_FATAL_ERROR(0);
 					}
 					SendLCDPrintMsg(param->lcdData,20,"SND: Gather Chk",portMAX_DELAY);
@@ -217,6 +215,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 			}
 			//1 is incoming i2c data, this is where we handle sensor data and call algorithm subroutines... hopefully
 			case SENSORVALUE_MSG: {
+				SendLCDStateMsg(param->lcdData, algState, macroState, portMAX_DELAY);
 				uint8_t *sensorFrame = getData(&msg);
 				SendLCDPrintMsg(param->lcdData,20,"RCV: Sensor Data",portMAX_DELAY);
 				
@@ -228,12 +227,12 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 						//SendLCDStateMsg(param->lcdData, algState, macroState, portMAX_DELAY);
 						break;
 					case MACROSTATE_FINDING_LINE:
-						algFunction(sensorFrame, &algState, &moveComm, &distance);
+						algFunction(sensorFrame, &algState, &moveComm, &macroState, &distance);
 						//SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
 						SendmotorMoveMsg(param->motorData, moveComm, distance, macroState, portMAX_DELAY);
 						break;
 					case MACROSTATE_RUN_ONE:
-						algFunction(sensorFrame, &algState, &moveComm, &distance);
+						algFunction(sensorFrame, &algState, &moveComm, &macroState, &distance);
 						//SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
 						SendmotorMoveMsg(param->motorData, moveComm, distance, macroState, portMAX_DELAY);
 						break;
@@ -243,8 +242,7 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 			break;
 			}
 			case MACROSTATE_OVERRIDE: {
-			uint8_t *newState = getData(&msg);
-			macroState = newState[0];
+			macroState = msg.data[0];
 			SendLCDPrintMsg(param->lcdData,20,"OVERRIDE OVERRIDE",portMAX_DELAY);
 			break;
 			}
@@ -281,13 +279,85 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				
 				//this is where the actual movement will be recorded in the map	
 
-				uint8_t *dataPtr = getData(&msg);
-				if(dataPtr[1] == 0x01)
+				webserverFlag =1;
+				
+				
+				//c = 1;
+				if(dataPtrSensor[1] == 0x01){ 
 					SendsensorGatherMsg(param);
+
+					//int temp = 0;
+					//int i; 
+					//for (i=0;i<=5;i++){
+
+					//secondRun[temp][i] = dataPtrSensor[i];
+
+					//temp++;
+				//}
+
+				}
+
+
+				
+				
 			break;
 			}
 		}
 
 	}
 }
+//curr = 0;
+
+//dataPtrSensor = 4398383366144;
+
+
+void vGetMapData(void){
+	
+	if (dataPtrSensor[1] == 0x00){
+ 	if(dataPtrSensor[2] > dataPtrSensor[3]){
+
+		//rover has made a right-hand turn, assume obstacle or corner
+		  flagRight = 1;
+		  flagLeft = 0;
+		  flagStraight = 0;
+		  if ((dataPtrSensor[2]-previousData[2])<= 0x02){
+		  }
+		  //sprintf(uip_appdata, "ctx.lineTo(200,150);\n");
+		}
+	if (dataPtrSensor[3] > dataPtrSensor[2]){
+		 flagLeft = 1;
+		 flagRight = 0;
+		 flagStraight = 0;
+		}
+	    //rover has made a left-hand turn, assume obstacle or corner 
+
+	if (dataPtrSensor[3] == dataPtrSensor[2]){
+			flagStraight = 1;
+			flagLeft = 0;
+			flagRight = 0;
+		} 
+		}
+}
+int inc = 0;
+/*int secondRunImp(inc){
+		//if (secondRun[inc][3]==secondRun[inc][2]){
+		if (inc==0){
+			if (secondRun[inc][3]>=	  0x5b){
+				return fast;
+			}
+			else 
+				return slow;	
+		}
+		else{
+		   if ((secondRun[inc][3]-secondRun[inc-1][3])>= 0x5b){
+		   		return fast;
+		   }
+		   else
+		   		return slow;
+		}
+		
+	//	}
+		//else 
+		//	return slow;
+} */
 

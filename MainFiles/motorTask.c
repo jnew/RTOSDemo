@@ -133,6 +133,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 						break;
 					case ROVERMOVE_FORWARD_SPECIALD:
 						motorCommand = bd_half_forward;
+						break;
 				}
 				//current slave address is 0x4F, take note
 				if (vtI2CEnQ(param->dev, vtRoverMovementCommand, 0x4F, 6, motorCommand, 3) != pdTRUE) {
