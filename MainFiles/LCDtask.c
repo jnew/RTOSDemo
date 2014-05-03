@@ -39,6 +39,8 @@
 #define LCDMsgTypeADC 3
 
 #define LCDMsgTypeState 4
+
+#define LCDMsgTypeRunTime 5
 // actual data structure that is sent in a message
 typedef struct __vtLCDMsg {
 	uint8_t msgType;
@@ -52,6 +54,7 @@ typedef struct __vtLCDMsg {
 static portTASK_FUNCTION_PROTO( vLCDUpdateTask, pvParameters );
 
 /*-----------------------------------------------------------*/
+static xQueueHandle staticLCDHandle;
 
 void StartLCDTask(vtLCDStruct *ptr, unsigned portBASE_TYPE uxPriority)
 {
@@ -113,6 +116,15 @@ portBASE_TYPE SendLCDStateMsg(vtLCDStruct *lcdData,uint8_t algState, uint8_t mac
 	lcdBuffer.buf[0] = algState;
 	lcdBuffer.buf[1] = macroState;
 	lcdBuffer.msgType = LCDMsgTypeState;
+	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
+}
+
+portBASE_TYPE SendLCDRunTimeMsg(vtLCDStruct *lcdData, uint8_t runTime, uint8_t macroState, portTickType ticksToBlock)
+{
+	vtLCDMsg lcdBuffer;
+	lcdBuffer.buf[0] = runTime;
+	lcdBuffer.buf[1] = macroState;
+	lcdBuffer.msgType = LCDMsgTypeRunTime;
 	return(xQueueSend(lcdData->inQ,(void *) (&lcdBuffer),ticksToBlock));
 }
 
@@ -256,7 +268,7 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 	#endif
 	initReadout();
 
-	curLine = 3;
+	curLine = 6;
 	curFrame = 0;
 	// This task should never exit
 	for(;;)
@@ -297,7 +309,23 @@ static portTASK_FUNCTION( vLCDUpdateTask, pvParameters )
 			curLine++;
 			if (curLine == 10) {
 				//GLCD_Clear(screenColor);
-				curLine = 3;
+				curLine = 6;
+			}
+			break;
+		}
+		case LCDMsgTypeRunTime: {
+			char timeBuffer[20];
+			switch(msgBuffer.buf[1]) {
+				case MACROSTATE_RUN_ONE: {
+				GLCD_ClearLn(3,1);
+				sprintf(timeBuffer, "Run One: %d sec", msgBuffer.buf[0]);
+				GLCD_DisplayString(3,0,1,(unsigned char *)timeBuffer);
+				break; }
+				case MACROSTATE_RUN_TWO:  {
+				GLCD_ClearLn(4,1);
+				sprintf(timeBuffer, "Run Two: %d sec", msgBuffer.buf[0]);
+				GLCD_DisplayString(4,0,1,(unsigned char *)timeBuffer);
+				break; }
 			}
 			break;
 		}

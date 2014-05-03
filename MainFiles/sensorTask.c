@@ -19,10 +19,15 @@
 #define i2cSTACK_SIZE		(8*configMINIMAL_STACK_SIZE)
 
 static xQueueHandle staticHandle;
+static uint8_t movesElapsed = 0;
+static uint8_t runOneTime = 0;
+static int runOneLastTicks = 0;
+static uint8_t runTwoTime = 0;
+static int runTwoLastTicks = 0;
 
 typedef struct {
 	uint8_t msgType;
-	uint8_t data[4];
+	uint8_t data[6];
 } sensorMsg;
 
 static portTASK_FUNCTION_PROTO( vsensorTask, pvParameters );
@@ -128,18 +133,19 @@ void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uin
 				*macroState = MACROSTATE_RUN_ONE;
 				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
 				*distance = 10;
-				//start run one timer
-			} else if(*macroState == MACROSTATE_RUN_ONE) {
-				//stop run one timer
+				movesElapsed = 0;
+				runOneLastTicks = xTaskGetTickCount()/1000;
+			} else if(*macroState == MACROSTATE_RUN_ONE && movesElapsed > 5) {
 				*macroState = MACROSTATE_RUN_TWO;
 				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
 				*distance = 10;
-				//start run two timer
-			} else if(*macroState == MACROSTATE_RUN_TWO) {
-				//stop run two timer
+				movesElapsed = 0;
+				runTwoLastTicks = xTaskGetTickCount()/1000;
+			} else if(*macroState == MACROSTATE_RUN_TWO && movesElapsed > 5) {
 				*macroState = MACROSTATE_FINISHED;
 				*moveComm = ROVERMOVE_FORWARD_ABSOLUTE;
 				*distance = 1;
+				movesElapsed = 0;
 				//we are done
 			}
 		} else if(sensorFrame[2] == 0x04 && sensorFrame[3] == 0x04) {
@@ -174,6 +180,18 @@ void algFunction(uint8_t *sensorFrame, uint8_t *algState, uint8_t *moveComm, uin
 		break;
 		}
 	}
+	movesElapsed++;
+	if(*macroState == MACROSTATE_RUN_ONE) {
+		int temp = xTaskGetTickCount()/1000;
+		runOneTime += temp - runOneLastTicks;
+		runOneLastTicks = temp;
+	//	SendLCDRunTimeMsg(runOneTime, *macroState, portMAX_DELAY);
+	} else if(*macroState == MACROSTATE_RUN_TWO) {
+		int temp = xTaskGetTickCount()/1000;
+		runTwoTime += temp - runTwoLastTicks;
+		runTwoLastTicks = temp;
+//		SendLCDRunTimeMsg(runTwoTime, *macroState, portMAX_DELAY);
+	}
 }
 
 static portTASK_FUNCTION(vsensorTask, pvParameters) {
@@ -191,6 +209,8 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 	
 	SendLCDPrintMsg(param->lcdData,20,"sensorTask Init",portMAX_DELAY);
 	SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
+	SendLCDRunTimeMsg(param->lcdData, runOneTime, MACROSTATE_RUN_ONE, portMAX_DELAY);
+	SendLCDRunTimeMsg(param->lcdData, runTwoTime, MACROSTATE_RUN_TWO, portMAX_DELAY);
 	
 	for( ;; ) {
 		//wait forever or until queue has something
@@ -221,6 +241,8 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 				
 				uint8_t distance = 0;
 				//this is where the movement algorithm will decide what to issue as a command
+				//if(sensorFrame[4] == 0x01)
+					//SendLCDPrintMsg(param->lcdData,20,"LINE",portMAX_DELAY);
 				switch (macroState) {
 					case MACROSTATE_IDLE:
 						SendsensorGatherMsg(param);
@@ -235,6 +257,13 @@ static portTASK_FUNCTION(vsensorTask, pvParameters) {
 						algFunction(sensorFrame, &algState, &moveComm, &macroState, &distance);
 						//SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
 						SendmotorMoveMsg(param->motorData, moveComm, distance, macroState, portMAX_DELAY);
+						SendLCDRunTimeMsg(param->lcdData, runOneTime, macroState, portMAX_DELAY);
+						break;
+					case MACROSTATE_RUN_TWO:
+						algFunction(sensorFrame, &algState, &moveComm, &macroState, &distance);
+						//SendLCDStateMsg(param->lcdData,algState, macroState, portMAX_DELAY);
+						SendmotorMoveMsg(param->motorData, moveComm, distance, macroState, portMAX_DELAY);
+						SendLCDRunTimeMsg(param->lcdData, runTwoTime, macroState, portMAX_DELAY);
 						break;
 				}
 				

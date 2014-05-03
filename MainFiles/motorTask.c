@@ -123,7 +123,7 @@ static portTASK_FUNCTION(vmotorTask, pvParameters) {
 						if(msg.macroState == MACROSTATE_RUN_TWO)
 							motorCommand = bc_fast_forward;
 						else
-							motorCommand = bc_fast_forward;
+							motorCommand = bc_half_forward;
 						break;
 					case ROVERMOVE_TURN_LEFT:
 						motorCommand = ba_90_left;

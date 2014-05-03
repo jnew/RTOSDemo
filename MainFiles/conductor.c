@@ -123,7 +123,7 @@ static portTASK_FUNCTION( vConductorUpdateTask, pvParameters )
 					VT_HANDLE_FATAL_ERROR(0);
 				}
 				timeOutCount = 0;
-				SendsensorValueMsg(sensorData, SENSORVALUE_MSG, 5, valPtr, portMAX_DELAY);
+				SendsensorValueMsg(sensorData, SENSORVALUE_MSG, 6, valPtr, portMAX_DELAY);
 			}
 			break;
 		}
